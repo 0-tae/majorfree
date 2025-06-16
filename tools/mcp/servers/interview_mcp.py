@@ -10,7 +10,7 @@ mcp = FastMCP(
 )
 
 @mcp.tool(
-    name="Interview RAG MCP",
+    name="interview_rag_tool", # TODO: 툴 이름도 참고하므로 의도에 맞게 정의해야함
     description="대학교 전공 적성 및 역량 파악을 위한 인터뷰 정보 조회에 특화된 도구. 사용자가 자신의 전공 적성을 말하면 전공 교수의 인터뷰 정보를 찾아 답변을 생성"
 )
 def query_for_interview(user_input: str) -> str:
