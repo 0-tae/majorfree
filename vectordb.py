@@ -1,42 +1,28 @@
 import chromadb
 from chromadb.config import Settings
 from typing import List, Dict, Any
+from sentence_transformers import SentenceTransformer
 
 class ChromaDB:
-    """
-    ChromaDB를 사용하여 벡터 데이터베이스를 관리하는 클래스입니다.
-    """
-    
-    def __init__(self, persist_directory: str = "./chroma_db"):
-        """
-        ChromaDB 클라이언트를 초기화합니다.
+    def __init__(self, collection_name:str = "interview_data"):
+        self.__client = chromadb.PersistentClient(path="./chroma")
+        self.__collection = self.__client.get_or_create_collection(name = collection_name)
+        self.__embedding_model = SentenceTransformer("snunlp/KR-SBERT-V40K-klueNLI-augSTS")
+
+
+    def __get_embeddings(self, input_str: str):
+        return self.__embedding_model.encode(input_str)
+
+    def query(self, input: str, filter:list = [], n_results:int = 10):
+        doc_embeddings = self.__get_embeddings(input)
         
-        Args:
-            persist_directory (str): 데이터를 저장할 디렉토리 경로
-        """
-        self.client = chromadb.Client(Settings(
-            persist_directory=persist_directory,
-            is_persistent=True
-        ))
-        
-    def query(self, collection_name: str, query_texts: List[str], n_results: int = 5) -> List[Dict[str, Any]]:
-        """
-        벡터 데이터베이스에서 유사한 문서를 검색합니다.
-        
-        Args:
-            collection_name (str): 검색할 컬렉션 이름
-            query_texts (List[str]): 검색할 텍스트 목록
-            n_results (int): 반환할 결과 개수 (기본값: 5)
-            
-        Returns:
-            List[Dict[str, Any]]: 검색 결과 목록
-        """
-        try:
-            collection = self.client.get_collection(collection_name)
-            results = collection.query(
-                query_texts=query_texts,
+        query_result = self.__collection.query(
+                query_embeddings=doc_embeddings,
+                where={"학과명": {"$in": filter}},
                 n_results=n_results
-            )
-            return results
-        except Exception as e:
-            raise Exception(f"ChromaDB 검색 중 오류 발생: {str(e)}")
+        )
+        print("ids: ", query_result['ids'][0])
+        return query_result['ids'][0],query_result["documents"][0]
+
+
+db_instance = ChromaDB(collection_name="interview_data")
