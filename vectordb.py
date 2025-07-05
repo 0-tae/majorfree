@@ -9,16 +9,18 @@ class ChromaDB:
         self.__collection = self.__client.get_or_create_collection(name = collection_name)
         self.__embedding_model = SentenceTransformer("snunlp/KR-SBERT-V40K-klueNLI-augSTS")
 
-
     def __get_embeddings(self, input_str: str):
         return self.__embedding_model.encode(input_str)
 
     def query(self, input: str, filter:list = [], n_results:int = 10):
         doc_embeddings = self.__get_embeddings(input)
         
+        # filter가 빈 리스트가 아닐 때만 where 조건 적용
+        where_condition = {"학과명": {"$in": filter}} if filter else None
+        
         query_result = self.__collection.query(
                 query_embeddings=doc_embeddings,
-                where={"학과명": {"$in": filter}},
+                where=where_condition,
                 n_results=n_results
         )
         print("ids: ", query_result['ids'][0])
