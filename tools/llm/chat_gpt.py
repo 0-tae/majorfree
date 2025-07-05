@@ -30,9 +30,9 @@ class ChatGPTModel:
         try:
             message = HumanMessage(content=instruction)
             response = self.model.invoke([message])
-            return response.choices[0].message.content
+            return response.content
         except Exception as e:
             raise Exception(f"ChatGPT API 호출 중 오류 발생: {str(e)}")
 
 
-model_instance = ChatGPTModel().get_model()
+model_instance = ChatGPTModel()
