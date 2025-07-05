@@ -1,17 +1,25 @@
 from mcp.server.fastmcp import FastMCP
 from tools.llm.chat_gpt import model_instance as chat_gpt
 from vectordb import db_instance as chroma_db
+from tools.mcp.mcp_server_config_loader import get_server_config_from_db
+from utils import write_rag_log
+# 데이터베이스에서 서버 설정 로드
+server_config = get_server_config_from_db(
+    "interview_mcp",
+    default_name="Interview RAG MCP",
+    default_description="대학교 전공 적성 및 역량 파악을 위한 인터뷰 정보 조회에 특화된 도구. 사용자가 자신의 전공 적성을 말하면 전공 교수의 인터뷰 정보를 찾아 답변을 생성"
+)
 
 mcp = FastMCP(
-    name="Interview RAG MCP",
-    description="대학교 전공 적성 및 역량 파악을 위한 인터뷰 정보 조회에 특화된 도구. 사용자가 자신의 전공 적성을 말하면 전공 교수의 인터뷰 정보를 찾아 답변을 생성",
+    name=server_config["name"],
+    description=server_config["description"],
     host='localhost',
     port = 8002
 )
 
 @mcp.tool(
-    name="interview_rag_tool", # TODO: 툴 이름도 참고하므로 의도에 맞게 정의해야함
-    description="대학교 전공 적성 및 역량 파악을 위한 인터뷰 정보 조회에 특화된 도구. 사용자가 자신의 전공 적성을 말하면 전공 교수의 인터뷰 정보를 찾아 답변을 생성"
+    name="interview_rag_tool",
+    description=server_config["description"]
 )
 def query_for_interview(user_input: str) -> str:
     context = retreive(user_input)
@@ -25,9 +33,16 @@ def query_for_interview(user_input: str) -> str:
             [질문]
             {user_input}'''
             
-    answer = chat_gpt.query(prompt)
+    result = chat_gpt.query(prompt)
     
-    result = answer
+    write_rag_log(
+        mcp_server="interview_rag_tool",
+        name=server_config["name"],
+        description=server_config["description"], 
+        instruction=user_input,
+        prompt=prompt,
+        answer=result
+    )
     
     return result
 
