@@ -15,9 +15,9 @@ class MCPServerManager:
         self._load_config()
         
         # 기본 그룹에 모든 서버 추가
-        for name, config in self.global_mcp_server_configs.items():
-            self.add_mcp_server_to_group("default", name)
-            self.run_mcp_server(name)
+        for server_name, config in self.global_mcp_server_configs.items():
+            self.add_mcp_server_to_group("default", server_name)
+            self.run_mcp_server("default",server_name)
 
 
     def _load_config(self):
@@ -25,12 +25,21 @@ class MCPServerManager:
             config = json.load(f)
             
         for name, server_config in config["mcpServers"].items():
+            # 기본 description 설정
+            default_descriptions = {
+                "cnu_data_mcp": "대학교 학과 학부 전공 강의 추천 및 관련 정보 조회, 강의계획서 조회에 특화된 도구",
+                "interview_mcp": "대학교 전공 적성 및 역량 파악을 위한 인터뷰 정보 조회에 특화된 도구"
+            }
+            
+            description = server_config.get("description") or default_descriptions.get(name, f"{name} MCP Server")
+            
             mcp_config = MCPServerConfig(
                 name=name,
                 transport=server_config.get("transport"),
                 command=server_config.get("command"),
                 args=server_config.get("args"),
-                port=server_config.get("port")
+                port=server_config.get("port"),
+                description=description
             )
                     
             self.global_mcp_server_configs[name] = mcp_config
@@ -45,7 +54,9 @@ class MCPServerManager:
 
     def add_mcp_server_to_group(self, group_name: str, server_name: str):
         if group_name in self.groups and server_name in self.global_mcp_server_configs:
-            self.groups[group_name]["mcp_server_configs"][server_name] = self.global_mcp_server_configs[server_name]
+            self.groups[group_name]["mcp_server_configs"][server_name] = self.global_mcp_server_configs[server_name].copy()
+            
+            
             print(f"MCP 서버 '{server_name}'가 그룹 '{group_name}'에 추가되었습니다.")
 
     def remove_mcp_server_from_group(self, group_name: str, server_name: str):
@@ -66,11 +77,11 @@ class MCPServerManager:
             }
             
         return result
-    def run_mcp_server(self, name: str):
-        if name not in self.global_mcp_server_configs:
-            raise ValueError(f"'{name}' MCP 서버를 찾을 수 없습니다.")
+    def run_mcp_server(self, group_name: str, server_name: str):
+        if server_name not in self.global_mcp_server_configs:
+            raise ValueError(f"'{server_name}' MCP 서버를 찾을 수 없습니다.")
         
-        config = self.global_mcp_server_configs[name]
+        config = self.global_mcp_server_configs[server_name]
         command = config.get_command()
         args = config.get_args()
 
@@ -120,7 +131,7 @@ class MCPServerManager:
             if process.poll() is not None:
                 # 프로세스가 이미 종료됨
                 stdout, stderr = process.communicate()
-                print(f"❌ {name} 서버 실행 실패:")
+                print(f"❌ {server_name} 서버 실행 실패:")
                 print(f"STDOUT: {stdout}")
                 print(f"STDERR: {stderr}")
                 return False
@@ -141,16 +152,16 @@ class MCPServerManager:
                         try:
                             response = requests.get(url, timeout=3)
                             if response.status_code == 200:
-                                print(f"✅ {name} 서버가 정상적으로 응답합니다.")
+                                print(f"✅ {server_name} 서버가 정상적으로 응답합니다.")
                                 break
                         except RequestException:
                             if i < max_retries - 1:
-                                print(f"⏳ {name} 서버 응답 대기 중... ({i+1}/{max_retries})")
+                                print(f"⏳ {server_name} 서버 응답 대기 중... ({i+1}/{max_retries})")
                                 time.sleep(retry_delay)
                             else:
-                                print(f"⚠️ {name} 서버가 응답하지 않습니다. 하지만 프로세스는 실행 중입니다.")
+                                print(f"⚠️ {server_name} 서버가 응답하지 않습니다. 하지만 프로세스는 실행 중입니다.")
                 else:
-                    print(f"❌ {name} 서버 프로세스가 비정상적으로 종료되었습니다.")
+                    print(f"❌ {server_name} 서버 프로세스가 비정상적으로 종료되었습니다.")
                     return False
                     
             except Exception as e:
@@ -163,17 +174,17 @@ class MCPServerManager:
                 
                 
             # 서버가 정상적으로 시작되었는지 확인
-            print(f"{name} MCP 서버가 백그라운드에서 실행되었습니다. (PID: {process.pid})")
+            print(f"{server_name} MCP 서버가 백그라운드에서 실행되었습니다. (PID: {process.pid})")
             
             # 실시간 로그 출력
             import threading
             def stream_output(pipe, prefix):
                 for line in iter(pipe.readline, ''):
                     if line.strip():  # 빈 줄 제외
-                        print(f"[{name}] {prefix}: {line.strip()}")
+                        print(f"[{server_name}] {prefix}: {line.strip()}")
                         
             threading.Thread(target=stream_output, args=(process.stdout, "OUT"), daemon=True).start()
-            threading.Thread(target=stream_output, args=(process.stderr,"process"), daemon=True).start()
+            threading.Thread(target=stream_output, args=(process.stderr,"error"), daemon=True).start()
             
             return True
             
