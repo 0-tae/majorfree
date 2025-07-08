@@ -1,6 +1,12 @@
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
+
+# HTTP Response 표준 구조
+class HttpResponse(BaseModel):
+    status: int
+    message: str
+    item: Optional[Union[Dict[str, Any], List[Any], Any]] = None
 
 class McpServerInfo(BaseModel):
     id: Optional[int] = None
@@ -21,6 +27,7 @@ class McpServerLog(BaseModel):
     instruction: str
     prompt: str
     answer: str
+    request_id: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -31,6 +38,7 @@ class SqlAgentLog(BaseModel):
     tool_input: str
     tool_output: str
     step_order: int
+    request_id: Optional[str] = None
     execution_time: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
