@@ -3,7 +3,7 @@
     "cnu_data_mcp": {
       "command": "python",
       "args": [
-        "tools/mcp/servers/cnu_data_mcp.py"
+        "servers/cnu_data_mcp.py"
       ],
       "transport": "sse",
       "port": 8001
@@ -12,7 +12,7 @@
     "interview_mcp": {
       "command": "python",
       "args": [
-        "tools/mcp/servers/interview_mcp.py"
+        "servers/interview_mcp.py"
       ],
       "transport": "sse",
       "port": 8002

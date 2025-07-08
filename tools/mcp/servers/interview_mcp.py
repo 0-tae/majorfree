@@ -1,8 +1,11 @@
 from mcp.server.fastmcp import FastMCP
-from tools.llm.chat_gpt import model_instance as chat_gpt
-from vectordb import db_instance as chroma_db
-from tools.mcp.mcp_server_config_loader import get_server_config_from_db
+from llm_models.chat_gpt import model_instance as chat_gpt
+from vectordb.chroma.chroma_db import db_instance as chroma_db
+from mcp_server_config_loader import get_server_config_from_db
 from utils import write_rag_log
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
+
 # 데이터베이스에서 서버 설정 로드
 server_config = get_server_config_from_db(
     "interview_mcp",
@@ -16,6 +19,10 @@ mcp = FastMCP(
     host='localhost',
     port = 8002
 )
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> PlainTextResponse:
+    return PlainTextResponse("ok")
 
 @mcp.tool(
     name="interview_rag_tool",

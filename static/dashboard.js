@@ -2,6 +2,11 @@
 
 // Markdown 파싱 함수
 function parseMarkdown(text) {
+    // null, undefined, 빈 문자열 체크
+    if (!text || text === null || text === undefined) {
+        return '';
+    }
+    
     if (typeof marked !== 'undefined') {
         return marked.parse(text);
     }
@@ -13,7 +18,10 @@ function parseMarkdown(text) {
 async function loadMcpServers() {
     try {
         const response = await fetch('/api/mcp-servers');
-        const servers = await response.json();
+        const result = await response.json();
+        
+        // HttpResponse 형식 처리
+        const servers = result.item || [];
         
         const container = document.getElementById('mcpServers');
         if (servers.length === 0) {
@@ -71,10 +79,13 @@ async function loadMcpServers() {
 async function loadSqlAgentLogs(page = 1) {
     try {
         const response = await fetch(`/api/sql-agent/logs/request-groups?page=${page}`);
-        const data = await response.json();
+        const result = await response.json();
+        
+        // HttpResponse 형식 처리
+        const data = result.item || {};
         
         const container = document.getElementById('sqlAgentLogs');
-        if (data.logs.length === 0) {
+        if (!data.logs || data.logs.length === 0) {
             container.innerHTML = '<div class="alert alert-info">SQL Agent 로그가 없습니다.</div>';
             return;
         }
@@ -88,18 +99,19 @@ async function loadSqlAgentLogs(page = 1) {
         html += '<div class="table-responsive"><table class="table table-striped table-sm">';
         html += '<thead><tr><th>Request ID</th><th>단계</th><th>도구</th><th>입력</th><th>출력</th><th>시간</th></tr></thead><tbody>';
         
-        data.logs.forEach(log => {
-            const toolInput = log[3]; // tool_input
-            const toolOutput = log[4]; // tool_output
-            const request_id = log[8]; // request_id
-            const inputId = 'sql_input_' + log[0];
-            const outputId = 'sql_output_' + log[0];
+        data.logs.forEach(logArray => {
+            const log = convertSqlLogArrayToObject(logArray);
+            const toolInput = log.tool_input;
+            const toolOutput = log.tool_output;
+            const request_id = log.request_id || 'N/A';
+            const inputId = 'sql_input_' + log.id;
+            const outputId = 'sql_output_' + log.id;
             
             html += `
                 <tr>
-                    <td><code class="small">${request_id ? request_id.substring(0, 8) + '...' : 'N/A'}</code></td>
-                    <td><span class="badge bg-secondary">${log[5]}</span></td>
-                    <td><code>${escapeHtml(log[2])}</code></td>
+                    <td><code class="small">${request_id !== 'N/A' ? request_id.substring(0, 8) + '...' : 'N/A'}</code></td>
+                    <td><span class="badge bg-secondary">${log.step_order}</span></td>
+                    <td><code>${escapeHtml(log.tool_name)}</code></td>
                     <td>
                         <div id="${inputId}" class="log-content collapsed">
                             ${escapeHtml(toolInput)}
@@ -112,7 +124,7 @@ async function loadSqlAgentLogs(page = 1) {
                         </div>
                         <small><a href="#" class="expand-text" onclick="toggleContent('${outputId}')">전체 보기</a></small>
                     </td>
-                    <td><small>${new Date(log[7]).toLocaleString()}</small></td>
+                    <td><small>${new Date(log.created_at).toLocaleString()}</small></td>
                 </tr>
             `;
         });
@@ -137,17 +149,21 @@ async function loadMcpLogs(page = 1) {
         // request_id 그룹화 모드인지 일반 모드인지 확인
         const useGroupMode = document.getElementById('mcpGroupMode')?.checked || false;
         
-        let response, data;
+        let response, result, data;
         if (useGroupMode) {
             response = await fetch(`/api/mcp-logs/request-groups?page=${page}`);
-            data = await response.json();
+            result = await response.json();
+            // HttpResponse 형식 처리
+            data = result.item || {};
         } else {
             response = await fetch(`/api/mcp-logs/paginated?page=${page}&per_page=${perPage}`);
-            data = await response.json();
+            result = await response.json();
+            // HttpResponse 형식 처리
+            data = result.item || {};
         }
         
         const container = document.getElementById('mcpLogs');
-        if (data.logs.length === 0) {
+        if (!data.logs || data.logs.length === 0) {
             container.innerHTML = '<div class="alert alert-info">MCP 서버 로그가 없습니다.</div>';
             return;
         }
@@ -169,21 +185,22 @@ async function loadMcpLogs(page = 1) {
         if (!useGroupMode) html += '<th>Request ID</th>';
         html += '<th>서버</th><th>이름</th><th>지시사항</th><th>답변</th><th>시간</th></tr></thead><tbody>';
         
-        data.logs.forEach(log => {
-            const instruction = log[4]; // instruction
-            const answer = log[6]; // answer
-            const request_id = log[9]; // request_id
-            const instructionId = 'mcp_inst_' + log[0];
-            const answerId = 'mcp_ans_' + log[0];
+        data.logs.forEach(logArray => {
+            const log = convertLogArrayToObject(logArray);
+            const instruction = log.instruction;
+            const answer = log.answer;
+            const request_id = log.request_id || 'N/A';
+            const instructionId = 'mcp_inst_' + log.id;
+            const answerId = 'mcp_ans_' + log.id;
             
             html += `
                 <tr>`;
             if (!useGroupMode) {
-                html += `<td><code class="small">${request_id ? request_id.substring(0, 8) + '...' : 'N/A'}</code></td>`;
+                html += `<td><code class="small">${request_id !== 'N/A' ? request_id.substring(0, 8) + '...' : 'N/A'}</code></td>`;
             }
             html += `
-                    <td><span class="badge bg-primary">${log[1]}</span></td>
-                    <td>${escapeHtml(log[2])}</td>
+                    <td><span class="badge bg-primary">${log.mcp_server}</span></td>
+                    <td>${escapeHtml(log.name)}</td>
                     <td>
                         <div id="${instructionId}" class="log-content collapsed">
                             ${escapeHtml(instruction)}
@@ -196,7 +213,7 @@ async function loadMcpLogs(page = 1) {
                         </div>
                         <small><a href="#" class="expand-text" onclick="toggleContent('${answerId}')">전체 보기</a></small>
                     </td>
-                    <td><small>${new Date(log[7]).toLocaleString()}</small></td>
+                    <td><small>${new Date(log.created_at).toLocaleString()}</small></td>
                 </tr>
             `;
         });
@@ -280,76 +297,6 @@ function renderPagination(containerId, data, onPageClick) {
     container.innerHTML = html;
 }
 
-// MCP 서버 정보 업데이트
-async function updateMcpServer(event) {
-    event.preventDefault();
-    
-    const formData = {
-        server_name: document.getElementById('serverName').value,
-        name: document.getElementById('name').value,
-        description: document.getElementById('description').value,
-        prompt: document.getElementById('prompt').value
-    };
-    
-    try {
-        const response = await fetch('/api/mcp-servers/update', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-            showAlert('success', '서버 정보가 성공적으로 업데이트되었습니다.');
-            document.getElementById('mcpUpdateForm').reset();
-        } else {
-            showAlert('danger', '서버 정보 업데이트 실패: ' + result.detail);
-        }
-    } catch (error) {
-        console.error('서버 업데이트 실패:', error);
-        showAlert('danger', '서버 업데이트 중 오류가 발생했습니다.');
-    }
-}
-
-// MCP 서버 실행
-async function executeMcpServer(event) {
-    event.preventDefault();
-    
-    const formData = {
-        server_name: document.getElementById('executeServerName').value,
-        name: document.getElementById('executeName').value,
-        description: document.getElementById('executeDescription').value,
-        instruction: document.getElementById('instruction').value,
-        prompt: document.getElementById('executePrompt').value
-    };
-    
-    try {
-        const response = await fetch('/api/mcp-servers/execute', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(formData)
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-            showAlert('success', '서버가 성공적으로 실행되었습니다.');
-            document.getElementById('mcpExecuteForm').reset();
-            loadMcpLogs(); // 로그 새로고침
-        } else {
-            showAlert('danger', '서버 실행 실패: ' + result.detail);
-        }
-    } catch (error) {
-        console.error('서버 실행 실패:', error);
-        showAlert('danger', '서버 실행 중 오류가 발생했습니다.');
-    }
-}
-
 // 유틸리티 함수들
 function escapeHtml(text) {
     const div = document.createElement('div');
@@ -357,31 +304,47 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function showAlert(type, message) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    const container = document.querySelector('.container');
-    container.insertBefore(alertDiv, container.firstChild);
-    
-    // 5초 후 자동으로 제거
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
-        }
-    }, 5000);
+// 배열 형태의 로그를 객체로 변환하는 함수
+function convertLogArrayToObject(logArray) {
+    // MCP 로그 배열 구조: [id, mcp_server, name, description, instruction, prompt, answer, created_at, updated_at, request_id]
+    if (Array.isArray(logArray)) {
+        return {
+            id: logArray[0],
+            mcp_server: logArray[1],
+            name: logArray[2],
+            description: logArray[3],
+            instruction: logArray[4],
+            prompt: logArray[5],
+            answer: logArray[6],
+            created_at: logArray[7],
+            updated_at: logArray[8],
+            request_id: logArray[9]
+        };
+    }
+    return logArray; // 이미 객체인 경우 그대로 반환
+}
+
+// SQL Agent 로그 배열을 객체로 변환하는 함수
+function convertSqlLogArrayToObject(logArray) {
+    // SQL Agent 로그 배열 구조: [id, instruction, tool_name, tool_input, tool_output, step_order, created_at, updated_at, request_id]
+    if (Array.isArray(logArray)) {
+        return {
+            id: logArray[0],
+            instruction: logArray[1],
+            tool_name: logArray[2],
+            tool_input: logArray[3],
+            tool_output: logArray[4],
+            step_order: logArray[5],
+            created_at: logArray[6],
+            updated_at: logArray[7],
+            request_id: logArray[8]
+        };
+    }
+    return logArray; // 이미 객체인 경우 그대로 반환
 }
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-    // 폼 이벤트 리스너 등록
-    document.getElementById('mcpUpdateForm').addEventListener('submit', updateMcpServer);
-    document.getElementById('mcpExecuteForm').addEventListener('submit', executeMcpServer);
-    
     // 초기 로그 및 서버 목록 로드
     loadSqlAgentLogs(1);
     loadMcpLogs(1);

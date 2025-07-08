@@ -1,7 +1,7 @@
 import json
 import subprocess
 import os
-from tools.mcp.mcp_server_config import MCPServerConfig
+from mcp_server_config import MCPServerConfig
 
 class MCPServerManager:
     def __init__(self):
@@ -21,7 +21,7 @@ class MCPServerManager:
 
 
     def _load_config(self):
-        with open("tools/mcp/mcp_config.json", "r") as f:
+        with open("mcp_config.json", "r") as f:
             config = json.load(f)
             
         for name, server_config in config["mcpServers"].items():
@@ -93,7 +93,7 @@ class MCPServerManager:
             env = os.environ.copy()
             
             # 프로젝트 루트 디렉토리를 PYTHONPATH에 추가
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))# majorfree 디렉토리
+            project_root = os.path.dirname(os.path.abspath(__file__))# majorfree 디렉토리
             
             if 'PYTHONPATH' in env:
                 env['PYTHONPATH'] = f"{project_root}:{env['PYTHONPATH']}"

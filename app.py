@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,17 +6,11 @@ from fastapi.templating import Jinja2Templates
 from fastapi import Request
 from typing import Optional, List
 import uvicorn
-import subprocess
-import psutil
 import uuid
+import httpx
 from models import (
-    McpServerInfo, McpServerLog, SqlAgentLog,
-    McpServerUpdateRequest, McpServerExecuteRequest, SqlAgentRequest, DateRangeRequest
+    HttpResponse, McpServerUpdateRequest, McpServerExecuteRequest, DateRangeRequest
 )
-from mcp_server_database import db as mcp_server_db
-from mcp_server_log_database import db as mcp_log_db
-from sql_agent_log_database import sql_agent_log_db
-from tools.mcp.mcp_server_manager import mcp_manager
 from utils import set_current_request_id, clear_current_request_id, get_current_request_id
 
 app = FastAPI(title="MCP Server & SQL Agent Dashboard", version="1.0.0")
@@ -39,222 +33,631 @@ templates = Jinja2Templates(directory="templates")
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
-import asyncio
 
-def check_process_status(port: int) -> bool:
-    """특정 포트를 사용하는 프로세스가 실행 중인지 확인합니다."""
+# MCP 서버 API 기본 URL
+MCP_SERVER_API_BASE_URL = "http://localhost:8888"
+
+async def get_mcp_server_configs_from_api(group_name: str = "default") -> dict:
+    """MCP 서버 API에서 설정을 가져옵니다."""
     try:
-        # lsof 명령어로 포트 사용 프로세스 확인
-        result = subprocess.run(['lsof', '-ti', f':{port}'], 
-                              capture_output=True, text=True, check=False)
-        return result.returncode == 0 and result.stdout.strip() != ''
-    except Exception:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-server-configs",
+                params={"group_name": group_name}
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data.get("configs", {})
+    except Exception as e:
+        print(f"🚨 MCP 서버 설정 조회 실패: {e}")
+        return {}
+
+async def run_mcp_server_via_api(group_name: str, server_name: str) -> bool:
+    """MCP 서버 API를 통해 서버를 실행합니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-server/run",
+                params={"group_name": group_name, "server_name": server_name}
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"].get("success", False)
+            return data.get("success", False)
+    except Exception as e:
+        print(f"🚨 MCP 서버 실행 실패: {e}")
         return False
 
-def get_process_info(port: int) -> dict:
-    """포트를 사용하는 프로세스 정보를 가져옵니다."""
+async def get_multi_server_mcp_clients_from_api() -> dict:
+    """MCP 서버 API에서 클라이언트 설정을 가져옵니다."""
     try:
-        result = subprocess.run(['lsof', '-ti', f':{port}'], 
-                              capture_output=True, text=True, check=False)
-        if result.returncode == 0 and result.stdout.strip():
-            pid = result.stdout.strip()
-            # psutil로 프로세스 정보 가져오기
-            try:
-                process = psutil.Process(int(pid))
-                return {
-                    "pid": pid,
-                    "status": process.status(),
-                    "cpu_percent": process.cpu_percent(),
-                    "memory_percent": process.memory_percent(),
-                    "create_time": process.create_time()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/multi-server-mcp-clients"
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"].get("client_config", {})
+            return data.get("client_config", {})
+    except Exception as e:
+        print(f"🚨 MCP 클라이언트 설정 조회 실패: {e}")
+        return {}
+
+# 데이터베이스 관련 헬퍼 함수들
+async def get_mcp_server_from_db_api(server_name: str, name: str) -> dict:
+    """MCP 서버 API에서 데이터베이스 서버 정보를 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-server-db/{server_name}",
+                params={"name": name}
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 MCP 서버 DB 조회 실패: {e}")
+        return None
+
+async def update_mcp_server_in_db_api(request: McpServerUpdateRequest) -> dict:
+    """MCP 서버 API를 통해 데이터베이스 서버 정보를 업데이트합니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-server-db/update",
+                json=request.dict()
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 MCP 서버 DB 업데이트 실패: {e}")
+        return {"message": "업데이트 실패"}
+
+async def get_mcp_logs_from_db_api(server_name: Optional[str] = None, limit: int = 100) -> List[dict]:
+    """MCP 서버 API에서 데이터베이스 로그를 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            params = {"limit": limit}
+            if server_name:
+                params["server_name"] = server_name
+            
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-logs-db",
+                params=params
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 MCP 로그 DB 조회 실패: {e}")
+        return []
+
+async def get_mcp_logs_paginated_from_db_api(page: int = 1, per_page: int = 10, server_name: Optional[str] = None) -> dict:
+    """MCP 서버 API에서 데이터베이스 로그를 페이지네이션으로 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            params = {"page": page, "per_page": per_page}
+            if server_name:
+                params["server_name"] = server_name
+            
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-logs-db/paginated",
+                params=params
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 MCP 로그 페이지네이션 DB 조회 실패: {e}")
+        return {"logs": [], "total": 0, "page": page, "per_page": per_page}
+
+async def get_mcp_logs_by_request_groups_from_db_api(page: int = 1, server_name: Optional[str] = None) -> dict:
+    """MCP 서버 API에서 request_id로 그룹화된 로그를 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            params = {"page": page}
+            if server_name:
+                params["server_name"] = server_name
+            
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-logs-db/request-groups",
+                params=params
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 MCP 로그 request 그룹 DB 조회 실패: {e}")
+        return {"logs": [], "total": 0, "page": page, "per_page": 1}
+
+async def get_mcp_logs_latest_from_db_api(instruction: str, server_name: Optional[str] = None) -> List[dict]:
+    """MCP 서버 API에서 최신 로그를 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            params = {"instruction": instruction}
+            if server_name:
+                params["server_name"] = server_name
+            
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-logs-db/latest",
+                params=params
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 MCP 로그 최신 DB 조회 실패: {e}")
+        return []
+
+async def get_mcp_logs_by_request_id_from_db_api(request_id: str) -> List[dict]:
+    """MCP 서버 API에서 특정 request_id 로그를 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-logs-db/by-request/{request_id}"
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 MCP 로그 request ID DB 조회 실패: {e}")
+        return []
+
+async def save_mcp_log_to_db_api(mcp_server: str, name: str, description: str, instruction: str, prompt: str, answer: str, request_id: str) -> dict:
+    """MCP 서버 API를 통해 로그를 저장합니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{MCP_SERVER_API_BASE_URL}/api/mcp-logs-db/save",
+                params={
+                    "mcp_server": mcp_server,
+                    "name": name,
+                    "description": description,
+                    "instruction": instruction,
+                    "prompt": prompt,
+                    "answer": answer,
+                    "request_id": request_id
                 }
-            except (psutil.NoSuchProcess, ValueError):
-                return {"pid": pid, "status": "unknown"}
-    except Exception:
-        pass
-    return {"status": "not_running"}
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 MCP 로그 저장 실패: {e}")
+        return {"message": "저장 실패"}
+
+async def get_sql_agent_logs_from_db_api(instruction: Optional[str] = None, limit: int = 100) -> List[dict]:
+    """MCP 서버 API에서 SQL Agent 로그를 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            params = {"limit": limit}
+            if instruction:
+                params["instruction"] = instruction
+            
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/sql-agent-logs-db",
+                params=params
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 SQL Agent 로그 DB 조회 실패: {e}")
+        return []
+
+async def get_sql_agent_logs_paginated_from_db_api(page: int = 1, per_page: int = 10) -> dict:
+    """MCP 서버 API에서 SQL Agent 로그를 페이지네이션으로 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/sql-agent-logs-db/paginated",
+                params={"page": page, "per_page": per_page}
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 SQL Agent 로그 페이지네이션 DB 조회 실패: {e}")
+        return {"logs": [], "total": 0, "page": page, "per_page": per_page}
+
+async def get_sql_agent_logs_by_request_groups_from_db_api(page: int = 1) -> dict:
+    """MCP 서버 API에서 SQL Agent 로그를 request_id로 그룹화하여 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/sql-agent-logs-db/request-groups",
+                params={"page": page}
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 SQL Agent 로그 request 그룹 DB 조회 실패: {e}")
+        return {"logs": [], "total": 0, "page": page, "per_page": 1}
+
+async def get_sql_agent_logs_latest_from_db_api(instruction: str) -> List[dict]:
+    """MCP 서버 API에서 SQL Agent 최신 로그를 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/sql-agent-logs-db/latest",
+                params={"instruction": instruction}
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 SQL Agent 로그 최신 DB 조회 실패: {e}")
+        return []
+
+async def get_sql_agent_logs_latest_by_request_id_from_db_api() -> List[dict]:
+    """MCP 서버 API에서 SQL Agent 최신 request_id 로그를 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{MCP_SERVER_API_BASE_URL}/api/sql-agent-logs-db/latest-by-request-id"
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 SQL Agent 로그 최신 request ID DB 조회 실패: {e}")
+        return []
+
+async def get_sql_agent_logs_by_date_range_from_db_api(request: DateRangeRequest) -> List[dict]:
+    """MCP 서버 API에서 SQL Agent 로그를 날짜 범위로 가져옵니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{MCP_SERVER_API_BASE_URL}/api/sql-agent-logs-db/date-range",
+                json=request.dict()
+            )
+            response.raise_for_status()
+            data = response.json()
+            # HttpResponse 형식 처리
+            if "item" in data:
+                return data["item"]
+            return data
+    except Exception as e:
+        print(f"🚨 SQL Agent 로그 날짜 범위 DB 조회 실패: {e}")
+        return []
 
 # MCP 서버 관련 API
-@app.get("/api/mcp-servers", response_model=List[McpServerInfo])
+@app.get("/api/mcp-servers", response_model=HttpResponse)
 async def get_mcp_servers():
     """MCP 서버 목록을 가져옵니다."""
     try:
-        # MCP Manager에서 서버 설정 가져오기
-        configs = mcp_manager.get_mcp_server_configs("default")
+        # MCP 서버 API에서 서버 설정 가져오기
+        response = await get_mcp_server_configs_from_api("default")
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "configs" in response:
+            configs = response["configs"]
+        else:
+            # 기존 API 호출 방식
+            configs = response
         
         servers = []
         for server_name, config in configs.items():
-            # 데이터베이스에서 서버 정보 가져오기
-            db_server = mcp_server_db.get_server_by_name(server_name, config.get_name())
+            # 데이터베이스에서 서버 정보 가져오기 (API 호출)
+            db_response = await get_mcp_server_from_db_api(server_name, config.get("name"))
+            db_server = db_response if db_response and not isinstance(db_response, dict) else (db_response.get("item") if db_response else None)
             
             # 프로세스 상태 확인
-            port = config.get_port()
+            port = config.get("port")
             process_info = get_process_info(port)
             is_running = process_info["status"] != "not_running"
             
-            # 안전하게 description 가져오기
-            try:
-                description = config.get_description()
-            except AttributeError:
-                description = f"{server_name} MCP Server"
+            # description 가져오기
+            description = config.get("description", f"{server_name} MCP Server")
             
-            server_info = McpServerInfo(
-                id=db_server[0] if db_server else None,
-                server_name=server_name,
-                name=config.get_name(),
-                description=db_server[3] if db_server else description,
-                prompt=db_server[4] if db_server else None,
-                created_at=db_server[5] if db_server else None,
-                updated_at=db_server[6] if db_server else None
-            )
-            
-            # 프로세스 상태 정보 추가
-            server_info.process_status = process_info
-            server_info.is_running = is_running
+            server_info = {
+                "id": db_server.get("id") if db_server else None,
+                "server_name": server_name,
+                "name": config.get("name"),
+                "description": db_server.get("description") if db_server else description,
+                "prompt": db_server.get("prompt") if db_server else None,
+                "created_at": db_server.get("created_at") if db_server else None,
+                "updated_at": db_server.get("updated_at") if db_server else None,
+                "process_status": process_info,
+                "is_running": is_running
+            }
             
             servers.append(server_info)
         
-        return servers
+        return HttpResponse(
+            status=200,
+            message="MCP 서버 목록을 성공적으로 조회했습니다.",
+            item=servers
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"MCP 서버 목록 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.get("/api/mcp-servers/{server_name}")
+@app.get("/api/mcp-servers/{server_name}", response_model=HttpResponse)
 async def get_mcp_server_detail(server_name: str):
     """특정 MCP 서버의 상세 정보를 가져옵니다."""
     try:
-        configs = mcp_manager.get_mcp_server_configs("default")
+        response = await get_mcp_server_configs_from_api("default")
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "configs" in response:
+            configs = response["configs"]
+        else:
+            configs = response
+            
         if server_name not in configs:
-            raise HTTPException(status_code=404, detail="서버를 찾을 수 없습니다.")
+            return HttpResponse(
+                status=404,
+                message="서버를 찾을 수 없습니다.",
+                item=None
+            )
         
         config = configs[server_name]
-        db_server = mcp_server_db.get_server_by_name(server_name, config.get_name())
+        db_response = await get_mcp_server_from_db_api(server_name, config.get("name"))
+        db_server = db_response if db_response and not isinstance(db_response, dict) else (db_response.get("item") if db_response else None)
         
         # 프로세스 상태 확인
-        port = config.get_port()
+        port = config.get("port")
         process_info = get_process_info(port)
         is_running = process_info["status"] != "not_running"
         
-        # 안전하게 description 가져오기
-        try:
-            description = config.get_description()
-        except AttributeError:
-            description = f"{server_name} MCP Server"
+        # description 가져오기
+        description = config.get("description", f"{server_name} MCP Server")
         
-        return {
+        server_detail = {
             "server_name": server_name,
-            "name": config.get_name(),
-            "description": db_server[3] if db_server else description,
-            "prompt": db_server[4] if db_server else None,
+            "name": config.get("name"),
+            "description": db_server.get("description") if db_server else description,
+            "prompt": db_server.get("prompt") if db_server else None,
             "port": port,
-            "transport": config.get_transport(),
+            "transport": config.get("transport"),
             "is_running": is_running,
             "process_info": process_info
         }
+        
+        return HttpResponse(
+            status=200,
+            message="MCP 서버 상세 정보를 성공적으로 조회했습니다.",
+            item=server_detail
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"MCP 서버 상세 정보 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.get("/api/mcp-logs", response_model=List[McpServerLog])
+@app.get("/api/mcp-logs", response_model=HttpResponse)
 async def get_mcp_logs(server_name: Optional[str] = None, limit: int = 100):
     """MCP 서버 로그를 가져옵니다."""
     try:
-        if server_name:
-            logs = mcp_log_db.get_logs_by_mcp_server(server_name)
-        else:
-            logs = mcp_log_db.get_all_logs(limit)
+        response = await get_mcp_logs_from_db_api(server_name, limit)
         
-        return [
-            McpServerLog(
-                id=log[0], mcp_server=log[1], name=log[2], description=log[3],
-                instruction=log[4], prompt=log[5], answer=log[6],
-                created_at=log[7], updated_at=log[8]
-            ) for log in logs
-        ]
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            logs = response["item"]
+        else:
+            logs = response
+        
+        return HttpResponse(
+            status=200,
+            message="MCP 서버 로그를 성공적으로 조회했습니다.",
+            item=logs
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"MCP 서버 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
 # 페이지네이션 API 추가
-@app.get("/api/mcp-logs/paginated")
+@app.get("/api/mcp-logs/paginated", response_model=HttpResponse)
 async def get_mcp_logs_paginated(page: int = 1, per_page: int = 10, server_name: Optional[str] = None):
     """MCP 서버 로그를 페이지네이션으로 가져옵니다."""
     try:
-        data = mcp_log_db.get_logs_paginated(page, per_page, server_name)
-        return data
+        response = await get_mcp_logs_paginated_from_db_api(page, per_page, server_name)
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            data = response["item"]
+        else:
+            data = response
+            
+        return HttpResponse(
+            status=200,
+            message="페이지네이션된 MCP 서버 로그를 성공적으로 조회했습니다.",
+            item=data
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"페이지네이션된 MCP 서버 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.get("/api/mcp-logs/request-groups")
+@app.get("/api/mcp-logs/request-groups", response_model=HttpResponse)
 async def get_mcp_logs_by_request_groups(page: int = 1, server_name: Optional[str] = None):
     """MCP 서버 로그를 request_id로 그룹화하여 페이지네이션으로 가져옵니다."""
     try:
         print(f"🔍 MCP request-groups called with page={page}, server_name={server_name}")
-        data = mcp_log_db.get_logs_by_request_id_paginated(page, per_page=1, server_name=server_name)
-        print(f"🔍 MCP request-groups result: {data}")
-        return data
+        response = await get_mcp_logs_by_request_groups_from_db_api(page, server_name)
+        print(f"🔍 MCP request-groups result: {response}")
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            data = response["item"]
+        else:
+            data = response
+            
+        return HttpResponse(
+            status=200,
+            message="request_id로 그룹화된 MCP 서버 로그를 성공적으로 조회했습니다.",
+            item=data
+        )
     except Exception as e:
         print(f"🚨 Error in get_mcp_logs_by_request_groups: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"request_id로 그룹화된 MCP 서버 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.get("/api/mcp-logs/latest")
+@app.get("/api/mcp-logs/latest", response_model=HttpResponse)
 async def get_mcp_logs_latest(instruction: str, server_name: Optional[str] = None):
     """특정 instruction에 대한 최신 MCP 로그를 가져옵니다."""
     try:
-        logs = mcp_log_db.get_latest_logs_by_instruction(instruction, server_name)
-        return logs
+        response = await get_mcp_logs_latest_from_db_api(instruction, server_name)
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            logs = response["item"]
+        else:
+            logs = response
+            
+        return HttpResponse(
+            status=200,
+            message="특정 instruction에 대한 최신 MCP 로그를 성공적으로 조회했습니다.",
+            item=logs
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"최신 MCP 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.get("/api/mcp-logs/by-request/{request_id}")
+@app.get("/api/mcp-logs/by-request/{request_id}", response_model=HttpResponse)
 async def get_mcp_logs_by_request_id(request_id: str):
     """특정 request_id에 해당하는 MCP 로그를 가져옵니다."""
     try:
-        logs = mcp_log_db.get_logs_by_request_id(request_id)
-        return logs
+        response = await get_mcp_logs_by_request_id_from_db_api(request_id)
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            logs = response["item"]
+        else:
+            logs = response
+            
+        return HttpResponse(
+            status=200,
+            message="특정 request_id에 해당하는 MCP 로그를 성공적으로 조회했습니다.",
+            item=logs
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"특정 request_id MCP 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.post("/api/mcp-servers/update")
+@app.post("/api/mcp-servers/update", response_model=HttpResponse)
 async def update_mcp_server(request: McpServerUpdateRequest):
     """MCP 서버 정보를 업데이트합니다."""
     try:
         # 데이터베이스에 서버 정보가 있는지 확인
-        configs = mcp_manager.get_mcp_server_configs("default")
+        response = await get_mcp_server_configs_from_api("default")
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "configs" in response:
+            configs = response["configs"]
+        else:
+            configs = response
+            
         if request.server_name not in configs:
-            raise HTTPException(status_code=404, detail="서버를 찾을 수 없습니다.")
+            return HttpResponse(
+                status=404,
+                message="서버를 찾을 수 없습니다.",
+                item=None
+            )
         
         config = configs[request.server_name]
-        db_server = mcp_server_db.get_server_by_name(request.server_name, request.name)
         
-        if db_server:
-            # 기존 데이터 업데이트
-            mcp_server_db.update(
-                server_name=request.server_name,
-                name=request.name,
-                description=request.description,
-                prompt=request.prompt or "None"
-            )
-        else:
-            # 새 데이터 삽입
-            mcp_server_db.save(
-                server_name=request.server_name,
-                name=request.name,
-                description=request.description,
-                prompt=request.prompt or "None"
-            )
+        # 데이터베이스 업데이트 (API 호출)
+        db_result = await update_mcp_server_in_db_api(request)
         
         # 서버 재시작
-        success = mcp_manager.run_mcp_server("default", request.server_name)
+        run_response = await run_mcp_server_via_api("default", request.server_name)
+        
+        # run_response가 HttpResponse 형식인지 확인
+        if isinstance(run_response, dict) and "item" in run_response:
+            success = run_response["item"].get("success", False)
+        else:
+            success = run_response
         
         if success:
-            return {"message": "MCP 서버가 성공적으로 업데이트되고 재시작되었습니다."}
+            return HttpResponse(
+                status=200,
+                message="MCP 서버가 성공적으로 업데이트되고 재시작되었습니다.",
+                item={"message": "MCP 서버가 성공적으로 업데이트되고 재시작되었습니다."}
+            )
         else:
-            return {"message": "서버 정보는 업데이트되었지만 재시작에 실패했습니다."}
+            return HttpResponse(
+                status=200,
+                message="서버 정보는 업데이트되었지만 재시작에 실패했습니다.",
+                item={"message": "서버 정보는 업데이트되었지만 재시작에 실패했습니다."}
+            )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"MCP 서버 업데이트 실패: {str(e)}",
+            item=None
+        )
 
-@app.post("/api/mcp-servers/execute")
+@app.post("/api/mcp-servers/execute", response_model=HttpResponse)
 async def execute_mcp_server(request: McpServerExecuteRequest):
     """MCP 서버를 실행하고 결과를 저장합니다."""
     # 고유한 request_id 생성
@@ -271,7 +674,16 @@ async def execute_mcp_server(request: McpServerExecuteRequest):
                         )
 
         # 클라이언트 연결
-        client_config = mcp_manager.get_multi_server_mcp_clients()
+        response = await get_multi_server_mcp_clients_from_api()
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            client_config = response["item"]["client_config"]
+        elif isinstance(response, dict) and "client_config" in response:
+            client_config = response["client_config"]
+        else:
+            client_config = response
+            
         client = MultiServerMCPClient(client_config)
 
         tools = await client.get_tools()
@@ -293,7 +705,7 @@ async def execute_mcp_server(request: McpServerExecuteRequest):
         
         
         for message in result.get("messages"):   
-            mcp_log_db.save(
+            await save_mcp_log_to_db_api(
                 mcp_server=request.server_name,
                 name=request.name,
                 description=request.description,
@@ -304,119 +716,170 @@ async def execute_mcp_server(request: McpServerExecuteRequest):
             )
 
         
-        return {
-            "answer": final_answer,
-            "request_id": request_id
-        }
+        return HttpResponse(
+            status=200,
+            message="MCP 서버 실행이 성공적으로 완료되었습니다.",
+            item={
+                "answer": final_answer,
+                "request_id": request_id
+            }
+        )
     except Exception as e:
         print(f"🚨 Error in execute_mcp_server: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"MCP 서버 실행 실패: {str(e)}",
+            item=None
+        )
     finally:
         # 실행 완료 후 request_id 정리
         print(f"🔍 Clearing request_id: {get_current_request_id()}")
         clear_current_request_id()
 
-# SQL Agent 관련 API
-@app.post("/api/sql-agent/execute")
-async def execute_sql_agent(request: SqlAgentRequest):
-    """SQL Agent를 실행합니다."""
-    model = ChatOpenAI(model="gpt-4o-mini", 
-                    temperature=0,
-                    api_key="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"
-                    )
-
-    # 클라이언트 연결
-    client_config = mcp_manager.get_multi_server_mcp_clients()
-    client = MultiServerMCPClient(client_config)
-
-    tools = asyncio.run(client.get_tools())
-        
-    agent = create_react_agent(model=model,
-                            tools=tools)
-
-    
-    try:
-        result = asyncio.run(agent.ainvoke({
-            "messages": [
-                {"role": "user", "content":request.instruction}
-            ]
-        }))
-
-        print(result)
-        return {"result": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/sql-agent/logs", response_model=List[SqlAgentLog])
+@app.get("/api/sql-agent/logs", response_model=HttpResponse)
 async def get_sql_agent_logs(instruction: Optional[str] = None, limit: int = 100):
     """SQL Agent 로그를 가져옵니다."""
     try:
-        if instruction:
-            logs = sql_agent_log_db.get_logs_by_instruction(instruction)
-        else:
-            logs = sql_agent_log_db.get_all_logs(limit)
+        response = await get_sql_agent_logs_from_db_api(instruction, limit)
         
-        return [
-            SqlAgentLog(
-                id=log[0], instruction=log[1], tool_name=log[2],
-                tool_input=log[3], tool_output=log[4], step_order=log[5],
-                execution_time=log[6], created_at=log[7]
-            ) for log in logs
-        ]
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            logs = response["item"]
+        else:
+            logs = response
+        
+        return HttpResponse(
+            status=200,
+            message="SQL Agent 로그를 성공적으로 조회했습니다.",
+            item=logs
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"SQL Agent 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
 # SQL Agent 페이지네이션 API 추가
-@app.get("/api/sql-agent/logs/paginated")
+@app.get("/api/sql-agent/logs/paginated", response_model=HttpResponse)
 async def get_sql_agent_logs_paginated(page: int = 1, per_page: int = 10):
     """SQL Agent 로그를 페이지네이션으로 가져옵니다."""
     try:
-        data = sql_agent_log_db.get_logs_paginated(page, per_page)
-        return data
+        response = await get_sql_agent_logs_paginated_from_db_api(page, per_page)
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            data = response["item"]
+        else:
+            data = response
+            
+        return HttpResponse(
+            status=200,
+            message="페이지네이션된 SQL Agent 로그를 성공적으로 조회했습니다.",
+            item=data
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"페이지네이션된 SQL Agent 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.get("/api/sql-agent/logs/request-groups")
+@app.get("/api/sql-agent/logs/request-groups", response_model=HttpResponse)
 async def get_sql_agent_logs_by_request_groups(page: int = 1):
     """SQL Agent 로그를 request_id로 그룹화하여 페이지네이션으로 가져옵니다."""
     try:
-        data = sql_agent_log_db.get_logs_by_request_id_paginated(page, per_page=1)
-        return data
+        response = await get_sql_agent_logs_by_request_groups_from_db_api(page)
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            data = response["item"]
+        else:
+            data = response
+            
+        return HttpResponse(
+            status=200,
+            message="request_id로 그룹화된 SQL Agent 로그를 성공적으로 조회했습니다.",
+            item=data
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"request_id로 그룹화된 SQL Agent 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.get("/api/sql-agent/logs/latest")
+@app.get("/api/sql-agent/logs/latest", response_model=HttpResponse)
 async def get_sql_agent_logs_latest(instruction: str):
     """특정 instruction에 대한 최신 SQL Agent 로그를 가져옵니다."""
     try:
-        logs = sql_agent_log_db.get_latest_logs_by_instruction(instruction)
-        return logs
+        response = await get_sql_agent_logs_latest_from_db_api(instruction)
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            logs = response["item"]
+        else:
+            logs = response
+            
+        return HttpResponse(
+            status=200,
+            message="특정 instruction에 대한 최신 SQL Agent 로그를 성공적으로 조회했습니다.",
+            item=logs
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"최신 SQL Agent 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.get("/api/sql-agent/logs/latest-by-request-id")
+@app.get("/api/sql-agent/logs/latest-by-request-id", response_model=HttpResponse)
 async def get_sql_agent_logs_latest_by_request_id():
     """가장 최근의 created_at 값을 가진 request_id를 포함하는 SQL Agent 로그 데이터를 가져옵니다."""
     try:
-        logs = sql_agent_log_db.get_latest_logs_by_latest_request_id()
-        return logs
+        response = await get_sql_agent_logs_latest_by_request_id_from_db_api()
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            logs = response["item"]
+        else:
+            logs = response
+            
+        return HttpResponse(
+            status=200,
+            message="최신 request_id에 해당하는 SQL Agent 로그를 성공적으로 조회했습니다.",
+            item=logs
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"최신 request_id SQL Agent 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
-@app.post("/api/sql-agent/logs/date-range")
+@app.post("/api/sql-agent/logs/date-range", response_model=HttpResponse)
 async def get_sql_agent_logs_by_date_range(request: DateRangeRequest):
     """날짜 범위로 SQL Agent 로그를 가져옵니다."""
     try:
-        logs = sql_agent_log_db.get_logs_by_date_range(request.start_date, request.end_date)
-        return [
-            SqlAgentLog(
-                id=log[0], instruction=log[1], tool_name=log[2],
-                tool_input=log[3], tool_output=log[4], step_order=log[5],
-                execution_time=log[6], created_at=log[7]
-            ) for log in logs
-        ]
+        response = await get_sql_agent_logs_by_date_range_from_db_api(request)
+        
+        # response가 HttpResponse 형식인지 확인
+        if isinstance(response, dict) and "item" in response:
+            logs = response["item"]
+        else:
+            logs = response
+            
+        return HttpResponse(
+            status=200,
+            message="날짜 범위에 해당하는 SQL Agent 로그를 성공적으로 조회했습니다.",
+            item=logs
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return HttpResponse(
+            status=500,
+            message=f"날짜 범위 SQL Agent 로그 조회 실패: {str(e)}",
+            item=None
+        )
 
 # 웹 페이지 라우트 (템플릿 사용)
 @app.get("/", response_class=HTMLResponse)

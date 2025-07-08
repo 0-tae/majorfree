@@ -5,6 +5,11 @@ let currentRequestId = '';
 
 // Markdown 파싱 함수
 function parseMarkdown(text) {
+    // null, undefined, 빈 문자열 체크
+    if (!text) {
+        return '';
+    }
+    
     if (typeof marked !== 'undefined') {
         return marked.parse(text);
     }
@@ -16,7 +21,10 @@ function parseMarkdown(text) {
 async function loadServerInfo() {
     try {
         const response = await fetch(`/api/mcp-servers/${serverName}`);
-        const server = await response.json();
+        const result = await response.json();
+        
+        // HttpResponse 형식 처리
+        const server = result.item || {};
         
         const statusBadge = server.is_running ? 
             '<span class="badge bg-success">실행 중</span>' : 
@@ -53,10 +61,13 @@ async function loadServerLogs(page = 1) {
     try {
         const perPage = document.getElementById('mcpPerPage')?.value || 10;
         const response = await fetch(`/api/mcp-logs/paginated?server_name=${serverName}&page=${page}&per_page=${perPage}`);
-        const data = await response.json();
+        const result = await response.json();
+        
+        // HttpResponse 형식 처리
+        const data = result.item || {};
         
         const container = document.getElementById('serverLogs');
-        if (data.logs.length === 0) {
+        if (!data.logs || data.logs.length === 0) {
             container.innerHTML = '<div class="alert alert-info">로그가 없습니다.</div>';
             return;
         }
@@ -64,17 +75,18 @@ async function loadServerLogs(page = 1) {
         let html = '<div class="table-responsive"><table class="table table-striped table-sm">';
         html += '<thead><tr><th>Request ID</th><th>이름</th><th>지시사항</th><th>답변</th><th>시간</th></tr></thead><tbody>';
         
-        data.logs.forEach(log => {
-            const instruction = log[4]; // instruction
-            const answer = log[6]; // answer
-            const request_id = log[9]; // request_id (새로 추가된 컬럼)
-            const instructionId = 'inst_' + log[0];
-            const answerId = 'ans_' + log[0];
+        data.logs.forEach(logArray => {
+            const log = convertLogArrayToObject(logArray);
+            const instruction = log.instruction;
+            const answer = log.answer;
+            const request_id = log.request_id || 'N/A';
+            const instructionId = 'inst_' + log.id;
+            const answerId = 'ans_' + log.id;
             
             html += `
                 <tr>
-                    <td><code class="small">${request_id ? request_id.substring(0, 8) + '...' : 'N/A'}</code></td>
-                    <td>${escapeHtml(log[2])}</td>
+                    <td><code class="small">${request_id !== 'N/A' ? request_id.substring(0, 8) + '...' : 'N/A'}</code></td>
+                    <td>${escapeHtml(log.name)}</td>
                     <td>
                         <div id="${instructionId}" class="log-content collapsed">
                             ${escapeHtml(instruction)}
@@ -87,7 +99,7 @@ async function loadServerLogs(page = 1) {
                         </div>
                         <small><a href="#" class="expand-text" onclick="toggleContent('${answerId}')">전체 보기</a></small>
                     </td>
-                    <td><small>${new Date(log[7]).toLocaleString()}</small></td>
+                    <td><small>${new Date(log.created_at).toLocaleString()}</small></td>
                 </tr>
             `;
         });
@@ -114,41 +126,52 @@ async function loadCurrentExecutionResults(instruction) {
     try {
         // 특정 instruction에 대한 가장 최근 MCP 서버 로그 조회
         const mcpResponse = await fetch(`/api/mcp-logs/latest?instruction=${encodeURIComponent(instruction)}&server_name=${serverName}`);
-        const mcpLogs = await mcpResponse.json();
+        const mcpResult = await mcpResponse.json();
+        
+        // HttpResponse 형식 처리
+        const mcpLogs = mcpResult.item || [];
         
         if (mcpLogs.length > 0) {
-            const log = mcpLogs[0];
-            const request_id = log[9]; // request_id는 인덱스 9에 위치
+            const logArray = mcpLogs[0];
+            const log = convertLogArrayToObject(logArray);
+            const request_id = log.request_id || null;
             currentRequestId = request_id;
             
             // 같은 request_id를 가진 모든 MCP 로그 가져오기
             if (request_id) {
                 const allMcpResponse = await fetch(`/api/mcp-logs/by-request/${request_id}`);
-                const allMcpLogs = await allMcpResponse.json();
+                const allMcpResult = await allMcpResponse.json();
                 
-                let mcpHtml = `<div class="mb-2">
-                    <strong>Request ID:</strong> <code>${request_id}</code>
-                    <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${request_id}')">
-                        <i class="fas fa-copy"></i>
-                    </button>
-                </div>`;
+                // HttpResponse 형식 처리
+                const allMcpLogs = allMcpResult.item || [];
+                
+                let mcpHtml = '';
+                if (request_id) {
+                    mcpHtml = `<div class="mb-2">
+                        <strong>Request ID:</strong> <code>${request_id}</code>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${request_id}')">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>`;
+                }
                 
                 if (allMcpLogs.length > 1) {
                     // 여러 개의 MCP 로그가 있으면 accordion으로 표시
                     mcpHtml += '<div class="accordion" id="mcpAccordion">';
-                    allMcpLogs.forEach((mcpLog, index) => {
+                    allMcpLogs.forEach((mcpLogArray, index) => {
+                        const mcpLog = convertLogArrayToObject(mcpLogArray);
                         mcpHtml += `
                             <div class="accordion-item">
                                 <h2 class="accordion-header" id="mcpHeading${index}">
                                     <button class="accordion-button ${index === 0 ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#mcpCollapse${index}">
-                                        ${escapeHtml(mcpLog[2])} - ${new Date(mcpLog[7]).toLocaleString()}
+                                        ${escapeHtml(mcpLog.name)} - ${new Date(mcpLog.created_at).toLocaleString()}
                                     </button>
                                 </h2>
                                 <div id="mcpCollapse${index}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}" data-bs-parent="#mcpAccordion">
                                     <div class="accordion-body">
-                                        <p><strong>지시사항:</strong> ${escapeHtml(mcpLog[4])}</p>
-                                        <div class="markdown-content">${parseMarkdown(mcpLog[6])}</div>
-                                        <small class="text-muted">${new Date(mcpLog[7]).toLocaleString()}</small>
+                                        <p><strong>지시사항:</strong> ${escapeHtml(mcpLog.instruction)}</p>
+                                        <div class="markdown-content">${parseMarkdown(mcpLog.answer)}</div>
+                                        <small class="text-muted">${new Date(mcpLog.created_at).toLocaleString()}</small>
                                     </div>
                                 </div>
                             </div>
@@ -157,14 +180,15 @@ async function loadCurrentExecutionResults(instruction) {
                     mcpHtml += '</div>';
                 } else {
                     // 하나의 로그만 있으면 단일 카드로 표시
-                    const mcpLog = allMcpLogs[0];
+                    const mcpLogArray = allMcpLogs[0];
+                    const mcpLog = convertLogArrayToObject(mcpLogArray);
                     mcpHtml += `
                         <div class="card">
                             <div class="card-body">
-                                <h6 class="card-title">${escapeHtml(mcpLog[2])}</h6>
-                                <p><strong>지시사항:</strong> ${escapeHtml(mcpLog[4])}</p>
-                                <div class="markdown-content">${parseMarkdown(mcpLog[6])}</div>
-                                <small class="text-muted">${new Date(mcpLog[7]).toLocaleString()}</small>
+                                <h6 class="card-title">${escapeHtml(mcpLog.name)}</h6>
+                                <p><strong>지시사항:</strong> ${escapeHtml(mcpLog.instruction)}</p>
+                                <div class="markdown-content">${parseMarkdown(mcpLog.answer)}</div>
+                                <small class="text-muted">${new Date(mcpLog.created_at).toLocaleString()}</small>
                             </div>
                         </div>
                     `;
@@ -175,10 +199,10 @@ async function loadCurrentExecutionResults(instruction) {
                 mcpContainer.innerHTML = `
                     <div class="card">
                         <div class="card-body">
-                            <h6 class="card-title">${escapeHtml(log[2])}</h6>
-                            <p><strong>지시사항:</strong> ${escapeHtml(log[4])}</p>
-                            <div class="markdown-content">${parseMarkdown(log[6])}</div>
-                            <small class="text-muted">${new Date(log[7]).toLocaleString()}</small>
+                            <h6 class="card-title">${escapeHtml(log.name)}</h6>
+                            <p><strong>지시사항:</strong> ${escapeHtml(log.instruction)}</p>
+                            <div class="markdown-content">${parseMarkdown(log.answer)}</div>
+                            <small class="text-muted">${new Date(log.created_at).toLocaleString()}</small>
                         </div>
                     </div>
                 `;
@@ -208,7 +232,10 @@ async function loadCurrentExecutionResults(instruction) {
 async function loadLatestSqlAgentLogs(container = null, paginationContainer = null, request_id = null) {
     try {
         const response = await fetch('/api/sql-agent/logs/latest-by-request-id');
-        const logs = await response.json();
+        const result = await response.json();
+        
+        // HttpResponse 형식 처리
+        const logs = result.item || [];
         
         const targetContainer = container || document.getElementById('currentSqlLogs');
         const targetPaginationContainer = paginationContainer || document.getElementById('currentSqlLogsPagination');
@@ -220,31 +247,35 @@ async function loadLatestSqlAgentLogs(container = null, paginationContainer = nu
         }
         
         // 첫 번째 로그에서 request_id를 가져옵니다 (모든 로그가 같은 request_id를 가짐)
-        const actualRequestId = request_id || logs[0][8]; // request_id는 인덱스 8에 위치
+        const actualRequestId = request_id || logs[0].request_id || null;
         
-        let sqlHtml = `<div class="mb-2">
-            <strong>Request ID:</strong> <code>${actualRequestId}</code>
-            <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${actualRequestId}')">
-                <i class="fas fa-copy"></i>
-            </button>
-        </div>`;
+        let sqlHtml = '';
+        if (actualRequestId) {
+            sqlHtml = `<div class="mb-2">
+                <strong>Request ID:</strong> <code>${actualRequestId}</code>
+                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${actualRequestId}')">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>`;
+        }
         sqlHtml += '<div class="accordion" id="sqlAccordion">';
         
-        logs.forEach((log, index) => {
+        logs.forEach((logArray, index) => {
+            const log = convertSqlLogArrayToObject(logArray);
             sqlHtml += `
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="heading${index}">
                         <button class="accordion-button ${index === 0 ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${index}">
-                            단계 ${log[5]} - ${escapeHtml(log[2])}
+                            단계 ${log.step_order} - ${escapeHtml(log.tool_name)}
                         </button>
                     </h2>
                     <div id="collapse${index}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}" data-bs-parent="#sqlAccordion">
                         <div class="accordion-body">
                             <p><strong>입력:</strong></p>
-                            <pre><code>${escapeHtml(log[3])}</code></pre>
+                            <pre><code>${escapeHtml(log.tool_input)}</code></pre>
                             <p><strong>출력:</strong></p>
-                            <pre><code>${escapeHtml(log[4])}</code></pre>
-                            <small class="text-muted">${new Date(log[7]).toLocaleString()}</small>
+                            <pre><code>${escapeHtml(log.tool_output)}</code></pre>
+                            <small class="text-muted">${new Date(log.created_at).toLocaleString()}</small>
                         </div>
                     </div>
                 </div>
@@ -293,7 +324,9 @@ async function updateServerInfo(event) {
             alert('서버 정보가 성공적으로 업데이트되었습니다.');
             loadServerInfo();
         } else {
-            alert('서버 정보 업데이트 실패: ' + result.detail);
+            // HttpResponse 형식 처리
+            const errorMessage = result.item?.message || result.message || result.detail || '알 수 없는 오류';
+            alert('서버 정보 업데이트 실패: ' + errorMessage);
         }
     } catch (error) {
         console.error('서버 업데이트 실패:', error);
@@ -328,20 +361,31 @@ async function executeServer(event) {
         
         const result = await response.json();
         
-        if (response.ok) {
-            currentRequestId = result.request_id;
-            resultContainer.innerHTML = `
+        if (response.ok && result.status === 200) {
+            // HttpResponse 형식 처리
+            const item = result.item || {};
+            currentRequestId = item.request_id || null;
+            
+            let resultHtml = `
                 <div class="alert alert-success">
-                    <h6>실행 성공!</h6>
+                    <h6>실행 성공!</h6>`;
+            
+            if (item.request_id) {
+                resultHtml += `
                     <div class="mb-2">
-                        <strong>Request ID:</strong> <code>${result.request_id}</code>
-                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${result.request_id}')">
+                        <strong>Request ID:</strong> <code>${item.request_id}</code>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${item.request_id}')">
                             <i class="fas fa-copy"></i>
                         </button>
-                    </div>
+                    </div>`;
+            }
+            
+            resultHtml += `
                     <p>실행 결과는 위의 "최근 실행 결과" 섹션에서 확인하실 수 있습니다.</p>
                 </div>
             `;
+            
+            resultContainer.innerHTML = resultHtml;
             
             // 실행 결과 영역 표시 및 메시지 숨김
             document.getElementById('currentExecutionResult').style.display = 'block';
@@ -353,9 +397,11 @@ async function executeServer(event) {
             // 전체 로그 새로고침
             loadServerLogs(1);
         } else {
+            // HttpResponse 형식 처리
+            const errorMessage = result.item?.message || result.message || result.detail || '알 수 없는 오류';
             resultContainer.innerHTML = `
                 <div class="alert alert-danger">
-                    서버 실행 실패: ${result.detail}
+                    서버 실행 실패: ${errorMessage}
                 </div>
             `;
         }
@@ -448,44 +494,55 @@ async function loadInitialResults() {
     try {
         // 최신 MCP 서버 로그 확인
         const mcpResponse = await fetch(`/api/mcp-logs/paginated?server_name=${serverName}&page=1&per_page=1`);
-        const mcpData = await mcpResponse.json();
+        const mcpResult = await mcpResponse.json();
         
-        if (mcpData.logs.length > 0) {
+        // HttpResponse 형식 처리
+        const mcpData = mcpResult.item || {};
+        
+        if (mcpData.logs && mcpData.logs.length > 0) {
             // 최신 로그가 있으면 실행 결과 영역 표시
             document.getElementById('currentExecutionResult').style.display = 'block';
             document.getElementById('noResultMessage').style.display = 'none';
             
             // 최신 MCP 결과 로드 - 같은 request_id를 가진 모든 로그
-            const log = mcpData.logs[0];
-            const request_id = log[9];
+            const logArray = mcpData.logs[0];
+            const log = convertLogArrayToObject(logArray);
+            const request_id = log.request_id || null;
             
             if (request_id) {
                 const allMcpResponse = await fetch(`/api/mcp-logs/by-request/${request_id}`);
-                const allMcpLogs = await allMcpResponse.json();
+                const allMcpResult = await allMcpResponse.json();
                 
-                let mcpHtml = `<div class="mb-2">
-                    <strong>Request ID:</strong> <code>${request_id}</code>
-                    <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${request_id}')">
-                        <i class="fas fa-copy"></i>
-                    </button>
-                </div>`;
+                // HttpResponse 형식 처리
+                const allMcpLogs = allMcpResult.item || [];
+                
+                let mcpHtml = '';
+                if (request_id) {
+                    mcpHtml = `<div class="mb-2">
+                        <strong>Request ID:</strong> <code>${request_id}</code>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('${request_id}')">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>`;
+                }
                 
                 if (allMcpLogs.length > 1) {
                     // 여러 개의 MCP 로그가 있으면 accordion으로 표시
                     mcpHtml += '<div class="accordion" id="initialMcpAccordion">';
-                    allMcpLogs.forEach((mcpLog, index) => {
+                    allMcpLogs.forEach((mcpLogArray, index) => {
+                        const mcpLog = convertLogArrayToObject(mcpLogArray);
                         mcpHtml += `
                             <div class="accordion-item">
                                 <h2 class="accordion-header" id="initialMcpHeading${index}">
                                     <button class="accordion-button ${index === 0 ? '' : 'collapsed'}" type="button" data-bs-toggle="collapse" data-bs-target="#initialMcpCollapse${index}">
-                                        ${escapeHtml(mcpLog[2])} - ${new Date(mcpLog[7]).toLocaleString()}
+                                        ${escapeHtml(mcpLog.name)} - ${new Date(mcpLog.created_at).toLocaleString()}
                                     </button>
                                 </h2>
                                 <div id="initialMcpCollapse${index}" class="accordion-collapse collapse ${index === 0 ? 'show' : ''}" data-bs-parent="#initialMcpAccordion">
                                     <div class="accordion-body">
-                                        <p><strong>지시사항:</strong> ${escapeHtml(mcpLog[4])}</p>
-                                        <div class="markdown-content">${parseMarkdown(mcpLog[6])}</div>
-                                        <small class="text-muted">${new Date(mcpLog[7]).toLocaleString()}</small>
+                                        <p><strong>지시사항:</strong> ${escapeHtml(mcpLog.instruction)}</p>
+                                        <div class="markdown-content">${parseMarkdown(mcpLog.answer)}</div>
+                                        <small class="text-muted">${new Date(mcpLog.created_at).toLocaleString()}</small>
                                     </div>
                                 </div>
                             </div>
@@ -494,14 +551,15 @@ async function loadInitialResults() {
                     mcpHtml += '</div>';
                 } else {
                     // 하나의 로그만 있으면 단일 카드로 표시
-                    const mcpLog = allMcpLogs[0];
+                    const mcpLogArray = allMcpLogs[0];
+                    const mcpLog = convertLogArrayToObject(mcpLogArray);
                     mcpHtml += `
                         <div class="card">
                             <div class="card-body">
-                                <h6 class="card-title">${escapeHtml(mcpLog[2])}</h6>
-                                <p><strong>지시사항:</strong> ${escapeHtml(mcpLog[4])}</p>
-                                <div class="markdown-content">${parseMarkdown(mcpLog[6])}</div>
-                                <small class="text-muted">${new Date(mcpLog[7]).toLocaleString()}</small>
+                                <h6 class="card-title">${escapeHtml(mcpLog.name)}</h6>
+                                <p><strong>지시사항:</strong> ${escapeHtml(mcpLog.instruction)}</p>
+                                <div class="markdown-content">${parseMarkdown(mcpLog.answer)}</div>
+                                <small class="text-muted">${new Date(mcpLog.created_at).toLocaleString()}</small>
                             </div>
                         </div>
                     `;
@@ -512,10 +570,10 @@ async function loadInitialResults() {
                 document.getElementById('currentMcpResult').innerHTML = `
                     <div class="card">
                         <div class="card-body">
-                            <h6 class="card-title">${escapeHtml(log[2])}</h6>
-                            <p><strong>지시사항:</strong> ${escapeHtml(log[4])}</p>
-                            <div class="markdown-content">${parseMarkdown(log[6])}</div>
-                            <small class="text-muted">${new Date(log[7]).toLocaleString()}</small>
+                            <h6 class="card-title">${escapeHtml(log.name)}</h6>
+                            <p><strong>지시사항:</strong> ${escapeHtml(log.instruction)}</p>
+                            <div class="markdown-content">${parseMarkdown(log.answer)}</div>
+                            <small class="text-muted">${new Date(log.created_at).toLocaleString()}</small>
                         </div>
                     </div>
                 `;
@@ -533,6 +591,45 @@ async function loadInitialResults() {
         document.getElementById('currentExecutionResult').style.display = 'none';
         document.getElementById('noResultMessage').style.display = 'block';
     }
+}
+
+// 배열 형태의 로그를 객체로 변환하는 함수
+function convertLogArrayToObject(logArray) {
+    // MCP 로그 배열 구조: [id, mcp_server, name, description, instruction, prompt, answer, created_at, updated_at, request_id]
+    if (Array.isArray(logArray)) {
+        return {
+            id: logArray[0],
+            mcp_server: logArray[1],
+            name: logArray[2],
+            description: logArray[3],
+            instruction: logArray[4],
+            prompt: logArray[5],
+            answer: logArray[6],
+            created_at: logArray[7],
+            updated_at: logArray[8],
+            request_id: logArray[9]
+        };
+    }
+    return logArray; // 이미 객체인 경우 그대로 반환
+}
+
+// SQL Agent 로그 배열을 객체로 변환하는 함수
+function convertSqlLogArrayToObject(logArray) {
+    // SQL Agent 로그 배열 구조: [id, instruction, tool_name, tool_input, tool_output, step_order, created_at, updated_at, request_id]
+    if (Array.isArray(logArray)) {
+        return {
+            id: logArray[0],
+            instruction: logArray[1],
+            tool_name: logArray[2],
+            tool_input: logArray[3],
+            tool_output: logArray[4],
+            step_order: logArray[5],
+            created_at: logArray[6],
+            updated_at: logArray[7],
+            request_id: logArray[8]
+        };
+    }
+    return logArray; // 이미 객체인 경우 그대로 반환
 }
 
 // 페이지 로드 시 초기화

@@ -1,6 +1,8 @@
 from mcp.server.fastmcp import FastMCP
-from tools.agent.sql_agent import SQLAgent
-from tools.mcp.mcp_server_config_loader import get_server_config_from_db
+from agent.sql_agent import SQLAgent
+from mcp_server_config_loader import get_server_config_from_db
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 sql_agent = SQLAgent(allowed_tables=['lecture_plan','departments','course_registration_info'])
 
@@ -17,6 +19,11 @@ mcp = FastMCP(
     host='localhost',
     port = 8001
 )
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> PlainTextResponse:
+    return PlainTextResponse("ok")
+
 
 @mcp.tool(
     name=server_config["name"],
