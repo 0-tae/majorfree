@@ -1,14 +1,17 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
-import json
+import json, os
 
 class ChatGPTModel:
     """
     ChatGPT API를 사용하기 위한 모델 클래스
     """
     def __init__(self, model: str = "gpt-4o-mini"):
-        with open('tools/llm/llm_config.json') as f:
-            llm_config = json.loads(f.read())
+        base_dir = os.path.dirname(os.path.abspath(__file__))  # chat_gpt.py의 경로 기준
+        config_path = os.path.join(base_dir, "llm_config.json")
+        
+        with open(config_path) as f:
+            llm_config = json.load(f)
             
         self.model = ChatOpenAI(model=model, 
                             temperature=0,

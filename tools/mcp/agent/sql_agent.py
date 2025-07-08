@@ -1,12 +1,9 @@
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import create_sql_agent
-from tools.llm.chat_gpt import model_instance
-import sys
-import os
+from llm_models.chat_gpt import model_instance
 import json
 import uuid
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from sql_agent_log_database import sql_agent_log_db
+from log_database.sql_agent_log_database import sql_agent_log_db
 from utils import get_current_request_id
 
 class SQLAgent:

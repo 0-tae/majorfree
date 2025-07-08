@@ -1,4 +1,4 @@
-from database_connector import instance as db
+from log_database.database_connector import instance as db
 
 class McpServerLogDatabase:
     def __init__(self):
