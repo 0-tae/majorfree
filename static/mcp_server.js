@@ -6,7 +6,7 @@ let currentRequestId = '';
 // Markdown 파싱 함수
 function parseMarkdown(text) {
     // null, undefined, 빈 문자열 체크
-    if (!text || text === null || text === undefined) {
+    if (!text) {
         return '';
     }
     
