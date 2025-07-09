@@ -7,9 +7,9 @@ from mcp_server_manager import mcp_manager
 from models import (
     HttpResponse, McpServerUpdateRequest, DateRangeRequest,
 )
-from log_database.mcp_server_database import db as mcp_server_db
-from log_database.mcp_server_log_database import db as mcp_log_db
-from log_database.sql_agent_log_database import sql_agent_log_db
+from database.mcp_server_database import db as mcp_server_db
+from database.mcp_server_log_database import db as mcp_log_db
+from database.sql_agent_log_database import sql_agent_log_db
 
 app = FastAPI(title="MCP Server API", version="1.0.0", port=8888)
 

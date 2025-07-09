@@ -3,7 +3,7 @@ from langchain_community.agent_toolkits import create_sql_agent
 from llm_models.chat_gpt import model_instance
 import json
 import uuid
-from log_database.sql_agent_log_database import sql_agent_log_db
+from database.sql_agent_log_database import sql_agent_log_db
 from utils import get_current_request_id
 
 class SQLAgent:

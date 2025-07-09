@@ -1,4 +1,4 @@
-from log_database.mcp_server_database import db as mcp_server_db
+from database.mcp_server_database import db as mcp_server_db
 
 def get_server_config_from_db(server_name: str, default_name: str = None, default_description: str = None):
     """

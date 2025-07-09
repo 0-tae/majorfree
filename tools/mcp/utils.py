@@ -1,4 +1,4 @@
-from log_database.rag_log_db import db as rag_log_db
+from database.rag_log_db import db as rag_log_db
 import threading
 import uuid
 
