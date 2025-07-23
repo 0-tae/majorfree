@@ -1,10 +1,11 @@
 class MCPServerConfig:
-    def __init__(self, name: str, transport: str, command: str, args: list, port: int, description: str = None):
+    def __init__(self, name: str, transport: str, command: str, args: list, port: int, env: dict, description: str = None):
         self.name = name
         self.transport = transport 
         self.command = command
         self.args = args
         self.port = port
+        self.env = env
         self.description = description or f"{name} MCP Server"
 
     def get_name(self) -> str:
@@ -22,6 +23,9 @@ class MCPServerConfig:
     def get_port(self) -> int:
         return self.port
 
+    def get_env(self) -> dict:
+        return self.env
+
     def get_description(self) -> str:
         return self.description
 
@@ -35,5 +39,6 @@ class MCPServerConfig:
             command=self.command,
             args=self.args.copy(),
             port=self.port,
+            env=self.env,
             description=self.description
         )
