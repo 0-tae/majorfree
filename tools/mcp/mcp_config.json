@@ -17,9 +17,7 @@
       "transport": "sse",
       "port": 8002
     }
-  }
-
-  ,"youtube-data-mcp-server": {
+    ,"youtube-data-mcp-server": {
       "command": "npx",
       "args": [
         "-y",
@@ -33,5 +31,22 @@
       ],
       "transport": "sse",
       "port": 8003
+    },
+
+    "google-search-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@modelcontextprotocol-servers/google-search-mcp",
+        "--key",
+        "9941f230-0737-4991-8604-bafabb98675e",
+        "--profile",
+        "average-cockroach-XGfBPo"
+      ],
+      "transport": "sse",
+      "port": 8004
     }
+  }
 }

@@ -1,9 +1,11 @@
-from log_database.rag_log_db import db as rag_log_db
+from database.rag_log_db import db as rag_log_db
 import threading
 import uuid
+from departments import Departments
 
 # 스레드 로컬 변수를 사용하여 현재 request_id 저장
 _thread_local = threading.local()
+departments = Departments()
 
 def set_current_request_id(request_id: str):
     """현재 스레드의 request_id를 설정합니다."""
@@ -45,3 +47,8 @@ def write_rag_log(mcp_server: str, name: str, description: str, instruction: str
     
     print(f"✅ RAG 로그 저장 완료 - request_id: {request_id}")
     print("WRITE PROMPT:",prompt)
+    
+def get_departments_info():
+    """학과 정보를 반환합니다."""
+    return departments.departments
+     

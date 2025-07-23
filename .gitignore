@@ -3,4 +3,5 @@ data/
 .env
 *__pycache__/
 lab/
-database_config.json
+**/*.json
+**/node_modules

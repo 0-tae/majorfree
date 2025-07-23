@@ -37,6 +37,7 @@ class MCPServerManager:
                 name=name,
                 transport=server_config.get("transport"),
                 command=server_config.get("command"),
+                env=server_config.get("env"),
                 args=server_config.get("args"),
                 port=server_config.get("port"),
                 description=description
@@ -73,7 +74,11 @@ class MCPServerManager:
         for name, config in configs.items():
             result[name] = {
                 "url": f"http://localhost:{config.get_port()}/{config.get_transport()}",
-                "transport": config.get_transport()
+                "transport": config.get_transport(),
+                "command": config.get_command(),
+                "args": config.get_args(),
+                "port": config.get_port(),
+                "env": config.get_env()
             }
             
         return result
@@ -81,7 +86,7 @@ class MCPServerManager:
         if server_name not in self.global_mcp_server_configs:
             raise ValueError(f"'{server_name}' MCP 서버를 찾을 수 없습니다.")
         
-        config = self.global_mcp_server_configs[server_name]
+        config = self.groups[group_name]["mcp_server_configs"][server_name]
         command = config.get_command()
         args = config.get_args()
 
@@ -92,8 +97,17 @@ class MCPServerManager:
             # 현재 환경변수 복사
             env = os.environ.copy()
             
+            if config.get_env():
+                print(f"🔧 환경변수 설정: {config.get_env()}")
+                env.update(config.get_env())
+                print(f"🔧 환경변수 설정 완료: {env}")
+            
             # 프로젝트 루트 디렉토리를 PYTHONPATH에 추가
-            project_root = os.path.dirname(os.path.abspath(__file__))# majorfree 디렉토리
+            if(command == "node"): # 노드일 경우
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # majorfree 디렉토리
+            else:
+                project_root = os.path.dirname(os.path.abspath(__file__)) # tools/mcp 디렉토리
+            
             
             if 'PYTHONPATH' in env:
                 env['PYTHONPATH'] = f"{project_root}:{env['PYTHONPATH']}"

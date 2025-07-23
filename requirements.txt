@@ -11,4 +11,4 @@ psutil==5.9.6
 chromadb
 sentence-transformers
 jinja2
-httpx 
+httpx==0.25.2

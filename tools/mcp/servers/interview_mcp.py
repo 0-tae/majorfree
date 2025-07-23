@@ -26,9 +26,9 @@ async def health_check(request: Request) -> PlainTextResponse:
 
 @mcp.tool(
     name="interview_rag_tool",
-    description=server_config["description"]
+    description=server_config["description"],
 )
-def query_for_interview(user_input: str) -> str:
+def query_for_interview(user_input: str, filter: str) -> str:
     context = retreive(user_input)
     
     prompt = f'''주어진 문맥 정보를 사용하여 다음 질문에 답변해 주세요.
