@@ -352,52 +352,29 @@ async def execute_mcp_server(request: McpServerExecuteRequest):
     set_current_request_id(request_id)
     print(f"🔍 Set current request_id in thread: {get_current_request_id()}")
     
-    try:
-        model = ChatOpenAI(model="gpt-4o-mini", 
-                        temperature=0,
-                        api_key="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"
-                        )
-
-        # 클라이언트 연결
-        response =  await get_multi_server_mcp_clients_from_api()
+    try:    
+        from graphs.main_graph import AgentGraphApplication
         
-        client_config = response
+        main_graph = AgentGraphApplication()
         
-        client = MultiServerMCPClient(client_config)
-
-        tools = await client.get_tools()
-
-        print(f"🔍 Tools: {tools}")
-            
-        agent = create_react_agent(model=model,
-                                tools=tools,
-                                debug=True)
-
-        
-        result = await agent.ainvoke({
-            "messages": [
-                {"role": "user", "content":request.instruction}
-            ]
-        })
+        result = await main_graph.run(question=request.instruction)
         
         print(f"🔍 Agent result: {result}")
         
         # 응답 메시지 로그 저장 (메인 실행 로그)
-        final_answer = result.get("messages")[-1].content if result.get("messages") else "No response"
+        final_answer = result.get("answer") if result.get("answer") else "No response"
         
-        
-        for message in result.get("messages"):   
+        for message in result.get("messages"):
             save_mcp_log_to_db_api(
                 mcp_server=request.server_name,
                 name=request.name,
                 description=request.description,
                 instruction=request.instruction,
                 prompt=request.prompt or "None",
-                answer=message.content,
+                answer=message.get("content"),
                 request_id=request_id
             )
 
-        
         return HttpResponse(
             status=200,
             message="MCP 서버 실행이 성공적으로 완료되었습니다.",
