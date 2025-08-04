@@ -6,3 +6,4 @@ lab/
 **/*.json
 **/node_modules
 **/dist
+tools/mcp/tools/mcp/vectordb/chroma/chroma/
