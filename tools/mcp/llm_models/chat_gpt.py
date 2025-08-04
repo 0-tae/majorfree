@@ -1,5 +1,6 @@
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from typing import List, Dict, Any
 import json, os
 
 class ChatGPTModel:
@@ -20,20 +21,44 @@ class ChatGPTModel:
     def get_model(self):
         return self.model
     
-    def query(self, instruction: str) -> str:
+    def query_by_single_instruction(self, instruction: str) -> str:
         """
         ChatGPT에 단순 질의를 수행합니다.
+        """
         
-        Args:
-            instruction (str): 사용자의 질의/지시사항
-            
-        Returns:
-            str: ChatGPT의 응답
+        try:
+            response = self.model.invoke([instruction])
+            print("🤖 GPT RESPONSE(SINGLE_INSTRUCTION):",response.content)
+            return response.content
+        except Exception as e:
+            raise Exception(f"ChatGPT API 호출 중 오류 발생: {str(e)}")
+        
+    def query_by_messages(self, messages: List[Dict[str, Any]]) -> str:
+        """
+        ChatGPT에 메시지 리스트로 질의를 수행합니다.
         """
         try:
-            message = HumanMessage(content=instruction)
-            response = self.model.invoke([message])
+            # Dict 형태의 메시지들을 LangChain Message 객체로 변환
+            langchain_messages = []
+            
+            for msg in messages:
+                role = msg.get("role", "")
+                content = msg.get("content", "")
+                
+                if role == "system":
+                    langchain_messages.append(SystemMessage(content=content))
+                elif role == "user":
+                    langchain_messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    langchain_messages.append(AIMessage(content=content))
+            
+            # 변환된 메시지 리스트를 invoke에 전달 (리스트로 감싸지 않음!)
+            response = self.model.invoke(langchain_messages)
+            
+            print("🤖 GPT RESPONSE(MESSAGES):",response.content)
+            
             return response.content
+            
         except Exception as e:
             raise Exception(f"ChatGPT API 호출 중 오류 발생: {str(e)}")
 
