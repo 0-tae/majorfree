@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any, Union
+from enum import Enum
 from datetime import datetime
 
 # HTTP Response 표준 구조
@@ -7,6 +8,45 @@ class HttpResponse(BaseModel):
     status: int
     message: str
     item: Optional[Union[Dict[str, Any], List[Any], Any]] = None
+
+class ChatRequest(BaseModel):
+    memberId: int
+    sessionId: str
+    question: str
+    chatType: Optional[str] = None
+    additionalData: Optional[Dict[str, str]] = None
+    
+class StatelessChatRequest(BaseModel):
+    question: str
+    chatType: Optional[str] = None
+    additionalData: Optional[Dict[str, str]] = None
+
+class ChatType(str, Enum):
+    YOUTUBE_SEARCH = 'YOUTUBE_SEARCH'
+    KOCW_SEARCH = 'KOCW_SEARCH'
+    WEB_SEARCH = 'WEB_SEARCH'
+    DEPARTMENT_SEARCH = 'DEPARTMENT_SEARCH'
+    COMMON = 'COMMON'
+
+class ChatSession(BaseModel):
+    id: Optional[int] = None
+    created_at: datetime
+    is_deleted: bool
+    modified_at: datetime
+    session_id: Optional[str] = None
+    member_id: int
+
+class Chat(BaseModel):
+    id: Optional[int] = None
+    created_at: datetime
+    is_deleted: bool
+    modified_at: datetime
+    chat_type: Optional[ChatType] = None
+    content: Optional[str] = None
+    is_bot: bool
+    chat_session_id: Optional[int] = None
+    member_id: int
+
 
 class McpServerInfo(BaseModel):
     id: Optional[int] = None
