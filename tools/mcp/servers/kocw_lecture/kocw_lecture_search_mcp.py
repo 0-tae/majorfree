@@ -1,6 +1,5 @@
 from mcp.server.fastmcp import FastMCP
 from agent.sql_agent import SQLAgent
-from mcp_server_config_loader import get_server_config_from_db
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import sys
@@ -8,25 +7,18 @@ from database.kocw_database import get_department_list
 
 sql_agent = SQLAgent(allowed_tables=['kocw_lecture'])
 
-# 데이터베이스에서 서버 설정 로드
-server_config = get_server_config_from_db(
-    "kocw_lecture_search_mcp",
-    default_name="kocw_lecture_search_mcp",
-    default_description="This server searches for KOCW (Korea Open CourseWare) lectures. When given a `subject_name` and a `department`, it returns lectures with similar information.."
-)
-
 mcp = FastMCP(
-    name=server_config["name"],
-    description=server_config["description"],
+    name="kocw_lecture_search_mcp",
+    description="This server searches for KOCW (Korea Open CourseWare) lectures. When given a `subject_name` and a `department`, it returns lectures with similar information..",
     host='localhost',
-    port = 8004
+    port = 8002
 )
 
 @mcp.tool(
-    name=server_config["name"],
-    description=server_config["description"]
+    name="kocw_lecture_search",
+    description="This server searches for KOCW (Korea Open CourseWare) lectures. When given a `subject_name` and a `department`, it returns lectures with similar information.."
 )
-def query_for_kocw_lecture(full_instruction: str) -> str:
+def kocw_lecture_search(full_instruction: str) -> str:
     department_list = get_department_list("kocw_lecture")
     
     try:
