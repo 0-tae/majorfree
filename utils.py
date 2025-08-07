@@ -52,3 +52,22 @@ def get_process_info(port: int) -> dict:
         return {"status": "not_running"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+    
+    
+# 작업 시작 시간과 끝 시간을 출력하는 time_check 데코레이터입니다.
+import time
+import functools
+
+def time_measurement(func):
+    """
+    함수의 실행 시작 시간과 끝 시간을 출력하는 데코레이터
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"⏱️ [{func.__name__}] 작업 시작 시간: {start_time:.2f}, 작업 끝 시간: {end_time:.2f}")
+        print(f"⏱️ [{func.__name__}] 소요 시간: {end_time - start_time:.2f}초")
+        return result
+    return wrapper
