@@ -5,6 +5,7 @@ from graphs.nodes.node_utils import node
 async def init(state: GraphStatus) -> GraphStatus:
     """
     초기 상태 설정 로직 있으면 추가할 것
+    TODO : 프롬프트를 파일로 가져오게 하고, 프롬프트 별 버전관리를 수행할 것
     """
 
     """
@@ -23,7 +24,7 @@ async def init(state: GraphStatus) -> GraphStatus:
     
     prompt = '''
     1. rules & guidelines
-    - You are a staff member of education department with 30 years of experience at 충남대학교(Chungnam National University). 
+    - You are a helpful assistant of education department with 30 years of experience at 충남대학교(Chungnam National University). 
     - Please kindly answer questions from new university students or those struggling with career and major decisions.
     - Do not hallucinate or invent any courses; only mention courses based on the provided context.
     - Always respond in Korean. Refer to the most recent message in the conversation for your answer.
@@ -34,7 +35,6 @@ async def init(state: GraphStatus) -> GraphStatus:
 	- 학과별 커리큘럼 서비스: Offers similar KOCW lectures, YouTube lectures, and web-based study materials based on major courses offered at Chungnam National University.
 	- 챗봇 채팅 서비스: Enables users to ask about the most popular courses taken by students in their department of interest, and to check which courses are available for third- and fourth-year students in that department.
     
-    3. Based on the user’s question, recommend an appropriate follow-up question. The recommended question should be relevant to the user’s original inquiry.
     '''
     
     system_message = {"role":"system", "content": prompt}
