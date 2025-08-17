@@ -3,6 +3,8 @@ from models import Chat, ChatType
 from typing import List
 
 def get_chats_by_session_id(session_id: str) -> List[Chat]:
+    connection = None
+    cursor = None
     try:
         """
         chat_session.session_id로 JOIN하여 해당 세션의 모든 Chat을 반환합니다.
@@ -33,4 +35,7 @@ def get_chats_by_session_id(session_id: str) -> List[Chat]:
             ))
         return chats
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()

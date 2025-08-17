@@ -10,20 +10,29 @@ class DatabaseConnector:
 
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
-        db_config = config['database']
+        self.db_config = config['database']
 
         self.connection = mysql.connector.connect(
-            host=db_config.get('host', 'localhost'),
-            port=db_config.get('port', 3306),
-            database=db_config.get('name', ''),
-            user=db_config.get('user', ''),
-            password=db_config.get('password', '')
+            host=self.db_config.get('host', 'localhost'),
+            port=self.db_config.get('port', 3306),
+            database=self.db_config.get('name', ''),
+            user=self.db_config.get('user', ''),
+            password=self.db_config.get('password', '')
         )
 
     def get_connection(self):
         """
         MySQL 연결 객체를 반환합니다.
         """
+        if not self.connection.is_connected():
+            self.connection = mysql.connector.connect(
+                host=self.db_config.get('host', 'localhost'),
+                port=self.db_config.get('port', 3306),
+                database=self.db_config.get('name', ''),
+                user=self.db_config.get('user', ''),
+                password=self.db_config.get('password', '')
+            )
+            
         return self.connection
 
     def get_cursor(self):
