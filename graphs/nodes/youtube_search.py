@@ -28,6 +28,26 @@ async def youtube_search(state: GraphStatus) -> GraphStatus:
     For each video, provide the video title, link, thumbnail, and a clear description.
     Exclude negative or inappropriate content and explain how such content was filtered out.
     instruction: {state["instruction"]}
+    
+    And After search, format the result as follows. For each video entry, apply the following rules:
+
+    1. Wrap the entire video block with [[YOUTUBE_VIDEO]] and [[/YOUTUBE_VIDEO]].
+    2. If a **title** exists, wrap it with [[TITLE]] and [[/TITLE]].
+    3. If a **URL/link** exists, wrap it with [[LINK]] and [[/LINK]].
+    4. If a **thumbnail** exists, wrap it with [[THUMBNAIL]] and [[/THUMBNAIL]].
+    5. If there is any remaining **description or metadata**, place it outside the above tags and wrap it with [[DESCRIPTION]] and [[/DESCRIPTION]].
+    6. If any of the title, link, or thumbnail is **missing**, do not include their corresponding tags at all.
+    7. Repeat this structure for each video item in the input.
+
+    Only output the properly tagged content. Do not add explanations or comments. Do this consistently for all videos in the list. 
+    
+    Example:
+    [[YOUTUBE_VIDEO]]
+    [[LINK]] 검색 결과 링크 [[/LINK]]
+    [[TITLE]]How to Learn Python in 2025[[/TITLE]]
+    [[THUMBNAIL]]썸네일 링크[[/THUMBNAIL]]
+    [[DESCRIPTION]]This video is a beginner-friendly guide to learning Python. Uploaded by CodeAcademy. Duration: 12:34. Views: 1.2M[[/DESCRIPTION]]
+    [[/YOUTUBE_VIDEO]]
     '''
     
     question_message =  {"role":"user", "content": prompt}
