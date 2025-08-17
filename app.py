@@ -1,19 +1,21 @@
-
-# TODO: LLM 서버에 채팅 전송 / 답변 응답하는 API 개발
-# LLM 채팅 저장 / 로드 로직 개발
-# 추가적인 prompt, args, search_type 입력을 고려하도록 개발
-
-from fastapi import FastAPI, Request
-from graphs.main_graph import AgentGraphApplication
+from fastapi import FastAPI, WebSocket, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from graphs.main_graph import graph_agent_instance as agent
 from models import ChatRequest, StatelessChatRequest, HttpResponse
 from databases.chat_database import get_chats_by_session_id
-import uvicorn
+import uvicorn, json
+from fastapi.websockets import WebSocketDisconnect
+from stream_models import AiMessageChunkModel, ChunkMetadataModel
+from utils import write_stream_log
+from databases.chat_database import get_chats_by_session_id
 
 app = FastAPI()
 
+templates = Jinja2Templates(directory="templates")
+
 @app.post("/api/v1/llm/chat", response_model=HttpResponse)
 async def chat(request: ChatRequest):
-    agent = AgentGraphApplication()
     
     chats = sorted(get_chats_by_session_id(request.sessionId), key=lambda chat: chat.created_at)
     messages = []
@@ -46,8 +48,6 @@ async def chat(request: ChatRequest):
     
 @app.post("/api/v1/llm/query", response_model=HttpResponse)
 async def query(request: StatelessChatRequest):
-    agent = AgentGraphApplication()
-    
     result = await agent.run(question=request.question,
               search_type=request.chatType,
               optional_args=request.additionalData
@@ -79,6 +79,93 @@ async def chat_test(request: ChatRequest):
         item=dummy_answer
     )
 
+@app.websocket("/api/v1/llm/chat/stream")
+async def chat_stream(websocket: WebSocket):
+    try:
+        await websocket.accept()
+        print("WebSocket 연결 수락됨")
+        
+        while True:
+            try:
+                data = await websocket.receive_json()
+                session_id = data.get("session_id")
+                
+                # TODO - session_id를 통해 기존 채팅내역 가져오기
+                # TODO 1) Redis에 session_id에 대한 채팅목록이 존재하면 로드,
+                # TODO 2) 없다면 MySQL 통해 채팅내역 모두 로드
+                # TODO 3) 채팅내역 모두 로드 후, Redis에 session_id에 대한 채팅목록 초기화
 
+
+                messages = []
+                
+                if session_id:
+                    chats = get_chats_by_session_id(session_id)
+                    for chat in chats:
+                        messages.append({
+                            "role": "assistant" if chat.is_bot else "user",
+                            "content": chat.content
+                        })
+                
+                current_node_name = None
+                
+                async for chunk in agent.run_astream(question=data.get("question"),
+                                                    existing_messages=messages,
+                                                    search_type=data.get("search_type"),
+                                                    optional_args=data.get("optional_args")):
+                    # 스트림 결과를 모델로 매핑
+                    raw_ai_message_chunk, raw_chunk_metadata = chunk
+                    ai_chunk = AiMessageChunkModel.from_langchain_chunk(raw_ai_message_chunk)
+                    meta = ChunkMetadataModel.from_dict(raw_chunk_metadata)
+
+                    # 클라이언트 노티용 페이로드 구성 및 전송
+                    payload = meta.to_client_payload()
+
+                    # 노드 이름이 변경되거나 노드 이름이 처음 설정 되었을 때 메타데이터 전송
+                    if (current_node_name != meta.node_name) or (current_node_name is None):
+                        await websocket.send_json(payload)
+
+                    # 최종 메시지 생성 단계(merge_messages) 일 때 메시지 전송
+                    if meta.node_name == "merge_messages":
+                        await websocket.send_text(ai_chunk.content)
+
+                    current_node_name = meta.node_name
+
+                    # 로그 기록 유틸 호출
+                    write_stream_log(ai_chunk, meta)
+                
+                await websocket.send_json(
+                    {
+                        "mode": "end",
+                        "metadata": {
+                            "message":"답변이 완료되었습니다."
+                        }
+                    }
+                )   
+                   
+            except WebSocketDisconnect:
+                client_host, client_port = websocket.client if hasattr(websocket, "client") else ("알 수 없음", "알 수 없음")
+                print(f"클라이언트 연결 종료 - IP: {client_host}, PORT: {client_port}")
+                break
+            except json.JSONDecodeError as e:
+                print(f"JSON 파싱 오류: {e}")
+                error_response = ChunkMetadataModel.get_error_payload("[⛔ 오류]: 잘못된 데이터 형식입니다.")
+                await websocket.send_json(error_response)
+            except Exception as e:
+                print(f"WebSocket 처리 중 오류: {e}")
+                error_response = ChunkMetadataModel.get_error_payload(f"[⛔ 오류]: 서버에 문제가 발생했습니다. 다시 시도해주세요.")
+                await websocket.send_json(error_response)
+                break
+                
+    except WebSocketDisconnect:
+        print("WebSocket 연결이 끊어졌습니다.")
+    except Exception as e:
+        print(f"WebSocket 초기화 중 오류: {e}")
+    finally:
+        print("WebSocket 연결 종료")
+        
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
+        
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
