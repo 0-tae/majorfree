@@ -3,7 +3,6 @@ from langchain_community.agent_toolkits import create_sql_agent
 from llm_models.chat_gpt import model_instance
 import json
 import uuid
-from utils import get_current_request_id
 
 class SQLAgent:
     def __init__(self, allowed_tables: list[str]):
@@ -24,11 +23,7 @@ class SQLAgent:
         )
     
     def question(self, prompt: str, instruction: str):
-        # 현재 스레드의 request_id를 가져오거나 새로 생성
-        current_request_id = get_current_request_id()
-        if not current_request_id:
-            current_request_id = str(uuid.uuid4())
-        
+
         messages=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": instruction}
