@@ -28,18 +28,17 @@ def search_syllabus(full_instruction: str) -> str:
         print(full_instruction)
         
         prompt = '''
-        학과 이름으로 추정되는 정보가 명시된 경우 WHERE 조건절에 반드시 추가하세요.
-        구체적인 학년이 명시된 경우 target_year를 WHERE 조건절에 반드시 추가하세요.
-        대학원에서 개설된 과목일 경우, 대학원 개설 과목임을 명시해주세요.
-        college는 충남대학교가 아닌, 단과 대학을 의미합니다.
+        1. If information that seems to be a department name is specified, you must include it in the WHERE clause.  
         
-  
-        If the course is not found in the database, extract and separate the core keywords from the input course title.
+        2. If a specific academic year is mentioned, you must include target_year in the WHERE clause.  
+        
+        3. If the course is offered in graduate school, you must explicitly state that it is a graduate-level course.
+        
+        4. If the course is not found in the database, extract and separate the core keywords from the input course title.
         Example : "%인간컴퓨터상호작용%" -> "%인간%", "%컴퓨터%", "%상호작용%"
         
-        and, extract and separate the core keywords from the input department too.
+        5. and, extract and separate the core keywords from the input department too.
         Example : ("전기공학과" -> "%전기%"), ("경영학부" -> "%경영%"), ("컴퓨터융합학부" -> "%컴퓨터%", "%융합%"), ("정보통신융합학부" -> "%정보%", "%통신%", "%융합%")
-        
         '''
         
         result = sql_agent.question(prompt, full_instruction)
@@ -64,17 +63,17 @@ def search_course_registration_info(full_instruction: str) -> str:
         sql_agent = SQLAgent(allowed_tables=['course_registration_info'])
         
         prompt = '''
-        학과 이름으로 추정되는 정보가 명시된 경우 WHERE 조건절에 반드시 추가하세요.
-        구체적인 학년이 명시된 경우 target_year를 WHERE 조건절에 반드시 추가하세요.
-        대학원에서 개설된 과목일 경우, 대학원 개설 과목임을 명시해주세요.
-        college는 충남대학교가 아닌, 단과 대학을 의미합니다.
-    
-        If the course is not found in the database, extract and separate the core keywords from the input course title.
+        1. If information that seems to be a department name is specified, you must include it in the WHERE clause.  
+        
+        2. If a specific academic year is mentioned, you must include target_year in the WHERE clause.  
+        
+        3. If the course is offered in graduate school, you must explicitly state that it is a graduate-level course.
+        
+        4. If the course is not found in the database, extract and separate the core keywords from the input course title.
         Example : "%인간컴퓨터상호작용%" -> "%인간%", "%컴퓨터%", "%상호작용%"
         
-        and, extract and separate the core keywords from the input department too.
+        5. and, extract and separate the core keywords from the input department too.
         Example : ("전기공학과" -> "%전기%"), ("경영학부" -> "%경영%"), ("컴퓨터융합학부" -> "%컴퓨터%", "%융합%"), ("정보통신융합학부" -> "%정보%", "%통신%", "%융합%")
-        
         '''
         
         result = sql_agent.question(prompt, full_instruction)
