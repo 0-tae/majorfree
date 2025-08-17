@@ -27,6 +27,7 @@ class ChatType(str, Enum):
     WEB_SEARCH = 'WEB_SEARCH'
     DEPARTMENT_SEARCH = 'DEPARTMENT_SEARCH'
     COMMON = 'COMMON'
+    FAST_FORWARD = 'FAST_FORWARD'
 
 class ChatSession(BaseModel):
     id: Optional[int] = None

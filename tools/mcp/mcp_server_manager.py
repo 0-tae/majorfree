@@ -90,9 +90,6 @@ class MCPServerManager:
         command = config.get_command()
         args = config.get_args()
 
-        if command == "python":
-            command = "python3.11"
-            
         try:
             # 현재 환경변수 복사
             env = os.environ.copy()

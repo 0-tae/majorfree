@@ -5,18 +5,9 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import sys
 
-sql_agent = SQLAgent(allowed_tables=['syllabus','departments','course_registration_info'])
-
-# 데이터베이스에서 서버 설정 로드
-server_config = get_server_config_from_db(
-    "cnu_data_mcp",
-    default_name="lecture_major_query_tool",
-    default_description="This tool is designed for searching and retrieving information about university departments, majors, and courses, including detailed lecture plans and syllabi. To carry out the user’s request flawlessly, always copy their most recent question exactly as it was asked."
-)
-
 mcp = FastMCP(
-    name=server_config["name"],
-    description=server_config["description"],
+    name="cnu_data_mcp",
+    description="우리 학교(충남대학교)의 강의계획서, 수강신청, 강의, 과목 정보를 데이터베이스를 이용하여 조회",
     host='localhost',
     port = 8001
 )
@@ -27,16 +18,62 @@ async def health_check(request: Request) -> PlainTextResponse:
 
 
 @mcp.tool(
-    name=server_config["name"],
-    description=server_config["description"]
-
+    name="search_syllabus",
+    description="우리 학교(충남대학교)의 과목 및 강의계획서 정보를 조회"
 )
-def query_for_cnu_data(full_instruction: str) -> str:
+def search_syllabus(full_instruction: str) -> str:
     try:
+        sql_agent = SQLAgent(allowed_tables=['syllabus'])
+        
+        print(full_instruction)
+        
         prompt = '''
-        학과 이름으로 추정되는 정보가 명시된 경우 WHERE 조건절에 반드시 추가하세요.
-        구체적인 학년이 명시된 경우 target_year를 WHERE 조건절에 반드시 추가하세요.
-        대학원에서 개설된 과목일 경우, 대학원 개설 과목임을 명시해주세요.
+        1. If information that seems to be a department name is specified, you must include it in the WHERE clause.  
+        
+        2. If a specific academic year is mentioned, you must include target_year in the WHERE clause.  
+        
+        3. If the course is offered in graduate school, you must explicitly state that it is a graduate-level course.
+        
+        4. If the course is not found in the database, extract and separate the core keywords from the input course title.
+        Example : "%인간컴퓨터상호작용%" -> "%인간%", "%컴퓨터%", "%상호작용%"
+        
+        5. and, extract and separate the core keywords from the input department too.
+        Example : ("전기공학과" -> "%전기%"), ("경영학부" -> "%경영%"), ("컴퓨터융합학부" -> "%컴퓨터%", "%융합%"), ("정보통신융합학부" -> "%정보%", "%통신%", "%융합%")
+        '''
+        
+        result = sql_agent.question(prompt, full_instruction)
+        
+        answer = result["output"]
+    
+        print(f"데이터 조회 쿼리 : {full_instruction}", file=sys.stderr)
+        print(f"데이터 조회 결과 : {result}", file=sys.stderr)
+        
+        return answer 
+    except Exception as e:
+        print(f"데이터 조회 오류 : {e}", file=sys.stderr)
+        return "데이터 조회 오류가 발생했습니다. 다시 시도해주세요. 오류 메시지: {e}"
+
+
+@mcp.tool(
+    name="search_course_registration_info",
+    description="우리 학교(충남대학교) 과목의 수강 신청 정보를 조회"
+)
+def search_course_registration_info(full_instruction: str) -> str:
+    try:
+        sql_agent = SQLAgent(allowed_tables=['course_registration_info'])
+        
+        prompt = '''
+        1. If information that seems to be a department name is specified, you must include it in the WHERE clause.  
+        
+        2. If a specific academic year is mentioned, you must include target_year in the WHERE clause.  
+        
+        3. If the course is offered in graduate school, you must explicitly state that it is a graduate-level course.
+        
+        4. If the course is not found in the database, extract and separate the core keywords from the input course title.
+        Example : "%인간컴퓨터상호작용%" -> "%인간%", "%컴퓨터%", "%상호작용%"
+        
+        5. and, extract and separate the core keywords from the input department too.
+        Example : ("전기공학과" -> "%전기%"), ("경영학부" -> "%경영%"), ("컴퓨터융합학부" -> "%컴퓨터%", "%융합%"), ("정보통신융합학부" -> "%정보%", "%통신%", "%융합%")
         '''
         
         result = sql_agent.question(prompt, full_instruction)
@@ -51,7 +88,6 @@ def query_for_cnu_data(full_instruction: str) -> str:
         print(f"데이터 조회 오류 : {e}", file=sys.stderr)
         return "데이터 조회 오류가 발생했습니다. 다시 시도해주세요. 오류 메시지: {e}"
     
-
     
 
 print(f"MCP Server({mcp.name}) is running...")
