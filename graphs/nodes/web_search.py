@@ -29,7 +29,7 @@ async def web_search(state: GraphStatus) -> GraphStatus:
     Search for information about the question. Please cite the sources of search results and respond in Korean.
     Question: {state["instruction"]}
     
-    And After search, format the result as follows. For each video entry, apply the following rules:
+    And After search, format the result as follows. apply the following rules:
 
     1. Wrap the entire video block with [[WEB_SEARCH]] and [[/WEB_SEARCH]].
     2. If a **title** exists, wrap it with [[TITLE]] and [[/TITLE]].
