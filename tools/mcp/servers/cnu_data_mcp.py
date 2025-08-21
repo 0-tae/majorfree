@@ -65,14 +65,16 @@ def search_course_registration_info(full_instruction: str) -> str:
         prompt = '''
         1. If information that seems to be a department name is specified, you must include it in the WHERE clause.  
         
-        2. If a specific academic year is mentioned, you must include target_year in the WHERE clause.  
+        2. 질문에 찾고자 하는 학년 정보가 포함되어 있을 경우, target_year을 WHERE 조건절에 포함하세요. (ex. 4학년이 많이 듣는 과목 -> target_year = 4)
         
         3. If the course is offered in graduate school, you must explicitly state that it is a graduate-level course.
         
-        4. If the course is not found in the database, extract and separate the core keywords from the input course title.
+        4. 만약 해당 강의가 대학원 과정에서 개설되는 과목이라면, 반드시 그 과목이 대학원 수준의 강의임을 명확하게 표시하세요.
+        
+        5. If the course is not found in the database, extract and separate the core keywords from the input course title.
         Example : "%인간컴퓨터상호작용%" -> "%인간%", "%컴퓨터%", "%상호작용%"
         
-        5. and, extract and separate the core keywords from the input department too.
+        6. and, If the course is not found in the database, extract and separate the core keywords from the input department too.
         Example : ("전기공학과" -> "%전기%"), ("경영학부" -> "%경영%"), ("컴퓨터융합학부" -> "%컴퓨터%", "%융합%"), ("정보통신융합학부" -> "%정보%", "%통신%", "%융합%")
         '''
         
