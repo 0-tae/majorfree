@@ -6,8 +6,13 @@ import uuid
 
 class SQLAgent:
     def __init__(self, allowed_tables: list[str]):
+        with open("database/database_config.json", 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            
+        db_config = config['database']
+        
         self.db = SQLDatabase.from_uri(
-            "mysql+mysqlconnector://root:dydrkfl#7!@localhost:3306/cnu_data",
+            f"mysql+mysqlconnector://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['name']}",
             include_tables = allowed_tables,
             sample_rows_in_table_info=1
             )
