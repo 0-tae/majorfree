@@ -8,11 +8,11 @@ class DatabaseConnector:
         db_config = config['database']
 
         self.connection = mysql.connector.connect(
-            host=db_config.get('host', 'localhost'),
-            port=db_config.get('port', 3306),
-            database=db_config.get('name', ''),
-            user=db_config.get('user', ''),
-            password=db_config.get('password', '')
+            host=db_config['host'],
+            port=db_config['port'],
+            database=db_config['name'],
+            user=db_config['user'],
+            password=db_config['password']
         )
         self.cursor = self.connection.cursor()
 
