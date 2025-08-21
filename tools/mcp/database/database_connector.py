@@ -3,12 +3,7 @@ import json,os
 
 class DatabaseConnector:
     def __init__(self):
-        
-        # 현재 파일(chat_gpt.py 등)의 디렉토리 기준으로 경로 설정
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(base_dir, 'database_config.json')
-
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open("database/database_config.json", 'r', encoding='utf-8') as f:
             config = json.load(f)
         db_config = config['database']
 
