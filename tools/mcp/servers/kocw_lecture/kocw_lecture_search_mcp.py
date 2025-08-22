@@ -3,7 +3,6 @@ from agent.sql_agent import SQLAgent
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 import sys
-from database.kocw_database import get_department_list
 
 sql_agent = SQLAgent(allowed_tables=['kocw_lecture'])
 
@@ -19,8 +18,6 @@ mcp = FastMCP(
     description="This server searches for KOCW (Korea Open CourseWare) lectures. When given a `subject_name` and a `department`, it returns lectures with similar information.."
 )
 def kocw_lecture_search(full_instruction: str) -> str:
-    department_list = get_department_list("kocw_lecture")
-    
     try:
         prompt = f'''
         You are a database administrator with 30 years of experience and act as a query assistant for retrieving lecture information from KOCW (Korea Open CourseWare).
@@ -34,9 +31,6 @@ def kocw_lecture_search(full_instruction: str) -> str:
         Example: "%인간컴퓨터상호작용%" -> "%인간%", "%컴퓨터%", "%상호작용%"
 
         Find the department name that is most similar to the department name provided in the instruction, and write a SQL query using that matched department name.
-        
-        The valid department names in the `kocw_lecture` table are: `{department_list}`.
-
 
         The query must return the following columns: `(subject_name, description,university, professor_name, created_at, url)`.
         '''
