@@ -78,15 +78,15 @@ def time_measurement(func):
     return wrapper
 
 
-def write_stream_log(ai_chunk: 'AiMessageChunkModel', meta: 'ChunkMetadataModel') -> None:
+def write_stream_log(ai_chunk: 'AiMessageChunkModel', meta: 'ChunkMetadataModel', session_id: str="none") -> None:
     """
     스트리밍 중 수신한 메시지 정보를 로그 파일로 기록합니다.
 
     파일명은 초 단위 타임스탬프를 포함하여, 동일 초 내 다중 호출에도 누적 기록됩니다.
     """
     try:
-        now_str = datetime.now().strftime("%y%m%d-%H:%M:%S")
-        log_filename = f"logs/chat_stream_{now_str}.log"
+        now_str = datetime.now().strftime("%y%m%d")
+        log_filename = f"logs/chat_stream_{now_str}_{session_id}.log"
 
         with open(log_filename, "a", encoding="utf-8") as log_file:
             log_file.write(
