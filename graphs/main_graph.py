@@ -100,7 +100,7 @@ class AgentGraphApplication:
                 "search_type": search_type.upper(), 
                 "optional_args": optional_args
             },
-            config={"configurable": {"thread_id": state["thread_id"]}},
+            config={"configurable": {"thread_id": thread_id}},
             stream_mode="messages"
         ):
             yield chunk  # chunk를 필요에 따라 join/누적/즉시 반환
