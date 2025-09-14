@@ -48,7 +48,9 @@ async def chat(request: ChatRequest):
     
 @app.post("/api/v1/llm/query", response_model=HttpResponse)
 async def query(request: StatelessChatRequest):
-    result = await agent.run(question=request.question,
+    result = await agent.run(
+              thread_id=request.sessionId,
+              question=request.question,
               search_type=request.chatType,
               optional_args=request.additionalData
               )
@@ -63,22 +65,6 @@ async def query(request: StatelessChatRequest):
         item={"answer":answer}
     )   
     
-@app.post("/api/v1/llm/chat/test", response_model=HttpResponse)
-async def chat_test(request: ChatRequest):
-    """
-    LLM 채팅 테스트용 더미 API입니다. 실제 LLM 호출 없이 더미 데이터를 반환합니다.
-    """
-    # 기존 chat API와 동일한 응답 구조 사용
-    dummy_answer = {
-        "role": "assistant",
-        "content": "이것은 테스트용 더미 답변입니다."
-    }
-    return HttpResponse(
-        status=200,
-        message="답변이 생성되었습니다.",
-        item=dummy_answer
-    )
-
 @app.websocket("/api/v1/llm/chat/stream")
 async def chat_stream(websocket: WebSocket):
     try:
@@ -90,15 +76,14 @@ async def chat_stream(websocket: WebSocket):
                 data = await websocket.receive_json()
                 session_id = data.get("session_id")
                 
-                # TODO - session_id를 통해 기존 채팅내역 가져오기
                 # TODO 1) Redis에 session_id에 대한 채팅목록이 존재하면 로드,
-                # TODO 2) 없다면 MySQL 통해 채팅내역 모두 로드
                 # TODO 3) 채팅내역 모두 로드 후, Redis에 session_id에 대한 채팅목록 초기화
-
 
                 messages = []
                 
                 if session_id:
+                    
+                    # TODO 2) 없다면 MySQL 통해 채팅내역 모두 로드
                     chats = get_chats_by_session_id(session_id)
                     for chat in chats:
                         messages.append({
@@ -108,7 +93,8 @@ async def chat_stream(websocket: WebSocket):
                 
                 current_node_name = None
                 
-                async for chunk in agent.run_astream(question=data.get("question"),
+                async for chunk in agent.run_astream(thread_id=session_id, 
+                                                    question=data.get("question"),
                                                     existing_messages=messages,
                                                     search_type=data.get("search_type"),
                                                     optional_args=data.get("optional_args")):

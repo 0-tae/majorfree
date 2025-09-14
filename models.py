@@ -17,6 +17,7 @@ class ChatRequest(BaseModel):
     additionalData: Optional[Dict[str, str]] = None
     
 class StatelessChatRequest(BaseModel):
+    sessionId: str
     question: str
     chatType: Optional[str] = None
     additionalData: Optional[Dict[str, str]] = None
