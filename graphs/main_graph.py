@@ -27,7 +27,7 @@ class AgentGraphApplication:
         cache = InMemoryCache()
         cache_policy = CachePolicy(
             ttl=600,
-            key_func = lambda state: state["thread_id"]+state["instruction"]
+            key_func = lambda state: str(state["thread_id"])+state["instruction"]
         )
         
         # node - initialize
