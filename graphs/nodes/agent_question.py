@@ -23,7 +23,7 @@ async def agent_question(state: GraphStatus) -> GraphStatus:
                             state_schema=GraphStatus)
     
     result = await agent.ainvoke(
-        {"messages": [question_message]},
+        {"messages": state["messages"]},
         config={"configurable": {"thread_id": state["thread_id"]}}
     )
     

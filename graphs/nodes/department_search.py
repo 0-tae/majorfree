@@ -14,6 +14,13 @@ async def department_search(state: GraphStatus) -> GraphStatus:
     instruction = state["instruction"]
     optional_args = state["optional_args"]
     
+    if optional_args is None:
+        generated_message = {"role":"system", "content": "학과 정보가 주어지지 않아서 답변을 대답할 수 없다는 맥락으로 답변하세요."}
+        return {
+            "messages": [generated_message],
+            "answer": generated_message["content"]
+        }
+    
     department = optional_args.get("department")
     
     context = retreive(instruction=instruction, department=department)
