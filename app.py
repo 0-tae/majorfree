@@ -107,7 +107,10 @@ async def chat_stream(websocket: WebSocket):
                     payload = meta.to_client_payload()
 
                     # 노드 이름이 변경되거나 노드 이름이 처음 설정 되었을 때 메타데이터 전송
-                    if (current_node_name != meta.node_name) or (current_node_name is None):
+                    if meta.node_name == "unknown":
+                        continue
+                    
+                    if ((current_node_name != meta.node_name) or (current_node_name is None)):
                         await websocket.send_json(payload)
 
                     # 최종 메시지 생성 단계(merge_messages) 일 때 메시지 전송
@@ -117,7 +120,7 @@ async def chat_stream(websocket: WebSocket):
                     current_node_name = meta.node_name
 
                     # 로그 기록 유틸 호출
-                    write_stream_log(ai_chunk, meta)
+                    write_stream_log(ai_chunk, meta, session_id)
                 
                 await websocket.send_json(
                     {
