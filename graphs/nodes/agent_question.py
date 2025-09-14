@@ -22,9 +22,10 @@ async def agent_question(state: GraphStatus) -> GraphStatus:
                             tools=tools,
                             state_schema=GraphStatus)
     
-    result = await agent.ainvoke({
-        "messages": state["messages"]
-    })
+    result = await agent.ainvoke(
+        {"messages": [question_message]},
+        config={"configurable": {"thread_id": state["thread_id"]}}
+    )
     
     print("😇 RESULT: ",result)
     

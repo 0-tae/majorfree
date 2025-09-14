@@ -11,3 +11,4 @@ class GraphStatus(TypedDict):
     optional_args: Dict[str, Any]
     context_relrelevant_score: float
     remaining_steps: int
+    thread_id: str

@@ -52,9 +52,10 @@ async def youtube_search(state: GraphStatus) -> GraphStatus:
     
     question_message =  {"role":"user", "content": prompt}
         
-    result = await agent.ainvoke({
-        "messages": [question_message]
-    })
+    result = await agent.ainvoke(
+        {"messages": [question_message]},
+        config={"configurable": {"thread_id": state["thread_id"]}}
+    )
     
     print("😇 YOUTUBE SEARCH RESULT: ",result)
     
