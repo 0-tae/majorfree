@@ -54,10 +54,27 @@ class ChunkMetadataModel:
             "mode": "loading" if node_name != "merge_messages" else "answer",
             "metadata": {
                 "node_name": node_name,
-                "message": f"답변을 위해 {node_name} 작업을 진행하고 있어요."
+                "message": self.get_message_by_node_name(node_name)
             } if node_name != "merge_messages" else None,
         }
+        
+    @staticmethod
+    def get_client_answer_payload() -> Dict[str, Any]:
+        return {
+            "mode": "answer",
+            "metadata": None
+        }
 
+    def get_message_by_node_name(self, node_name: str) -> str:
+        return {
+            "agent_question": f"답변을 위해 챗봇이 필요한 작업을 선택하고 있어요.",
+            "fast_forward_question": f"빠른 답변을 위해 작업을 진행하고 있어요.",
+            "youtube_search": "답변을 위해 '유튜브 검색'을 진행하고 있어요.",
+            "kocw_search": f"답변을 위해 'KOCW 강의 검색'을 진행하고 있어요.",
+            "web_search": f"답변을 위해 '웹 검색'을 진행하고 있어요.",
+            "department_search": f"답변을 위해 '학과 정보 검색'을 진행하고 있어요.",
+        }.get(node_name, "답변을 위해 작업을 진행하고 있어요.")
+        
     @classmethod
     def from_dict(cls, metadata: Optional[Dict[str, Any]]) -> "ChunkMetadataModel":
         data = metadata or {}
