@@ -57,11 +57,14 @@ async def merge_messages(state: GraphStatus) -> GraphStatus:
     
     state["messages"] += [{"role":"user", "content": prompt}]
     
-    result = model.query_by_messages(state["messages"])
+    # 청크를 model이 흘려보내게만 함. 노드에서는 완성된 answer만 dict 반환!
+    answer = ""
+    async for chunk in model.stream_query_by_messages(state["messages"]):
+        answer += chunk.content if hasattr(chunk, 'content') else str(chunk)
+        # yield chunk <-- 여기서 yield 하면 안됨! 노드가 state에 async_generator 남김.
+        # 노드 바깥 astream에서 yield chunk 구현해야 함.
     
-    answer =  result
     generated_message = {"role":"assistant", "content": answer}
-    
     
     return {
         "messages": [generated_message],

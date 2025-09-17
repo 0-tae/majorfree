@@ -93,11 +93,23 @@ async def chat_stream(websocket: WebSocket):
                 
                 current_node_name = None
                 
+                await websocket.send_json({
+                    "mode": "loading",
+                    "metadata": {
+                        "message": "챗봇에게 질문을 전달하고 있어요. 잠시만 기다려주세요."
+                    }
+                })
+                
                 async for chunk in agent.run_astream(thread_id=session_id, 
                                                     question=data.get("question"),
                                                     existing_messages=messages,
                                                     search_type=data.get("search_type"),
                                                     optional_args=data.get("optional_args")):
+                    
+                    if current_node_name is None:
+                        init_payload = ChunkMetadataModel.get_client_answer_payload()
+                        await websocket.send_json(init_payload)
+                    
                     # 스트림 결과를 모델로 매핑
                     raw_ai_message_chunk, raw_chunk_metadata = chunk
                     ai_chunk = AiMessageChunkModel.from_langchain_chunk(raw_ai_message_chunk)

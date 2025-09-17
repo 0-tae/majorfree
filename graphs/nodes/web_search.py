@@ -52,8 +52,7 @@ async def web_search(state: GraphStatus) -> GraphStatus:
     question_message = {"role":"user", "content": prompt}
         
     result = await agent.ainvoke(
-        {"messages": [question_message]},
-        config={"configurable": {"thread_id": state["thread_id"]}}
+        {"messages": [question_message]}
     )
      
     answer =  result.get("messages")[-1].content if result.get("messages") else "No response"
