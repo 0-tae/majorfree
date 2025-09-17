@@ -39,6 +39,8 @@ def search_syllabus(full_instruction: str) -> str:
         
         5. and, extract and separate the core keywords from the input department too.
         Example : ("전기공학과" -> "%전기%"), ("경영학부" -> "%경영%"), ("컴퓨터융합학부" -> "%컴퓨터%", "%융합%"), ("정보통신융합학부" -> "%정보%", "%통신%", "%융합%")
+        
+        6. 학과 이름이 주어지지 않았다면 과목명으로만 탐색하세요. '충남대학교'는 학과 이름이 아닙니다.
         '''
         
         result = sql_agent.question(prompt, full_instruction)
@@ -76,6 +78,8 @@ def search_course_registration_info(full_instruction: str) -> str:
         
         6. and, If the course is not found in the database, extract and separate the core keywords from the input department too.
         Example : ("전기공학과" -> "%전기%"), ("경영학부" -> "%경영%"), ("컴퓨터융합학부" -> "%컴퓨터%", "%융합%"), ("정보통신융합학부" -> "%정보%", "%통신%", "%융합%")
+        
+        7. 학과 이름이 주어지지 않았다면 과목명으로만 탐색하세요. '충남대학교'는 학과 이름이 아닙니다.
         '''
         
         result = sql_agent.question(prompt, full_instruction)
