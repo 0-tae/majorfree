@@ -62,5 +62,32 @@ class ChatGPTModel:
         except Exception as e:
             raise Exception(f"ChatGPT API 호출 중 오류 발생: {str(e)}")
 
-
+    async def stream_query_by_messages(self, messages: List[Dict[str, Any]]) -> str:
+        """
+        ChatGPT에 메시지 리스트로 질의를 수행합니다.
+        """
+        try:
+            # Dict 형태의 메시지들을 LangChain Message 객체로 변환
+            langchain_messages = []
+            
+            for msg in messages:
+                role = msg.get("role", "")
+                content = msg.get("content", "")
+                
+                if role == "system":
+                    langchain_messages.append(SystemMessage(content=content))
+                elif role == "user":
+                    langchain_messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    langchain_messages.append(AIMessage(content=content))
+            
+        
+            async for chunk in self.model.astream(langchain_messages):
+                # chunk는 AIMessageChunk이며 .content 또는 .text 사용 가능
+                # 부분 토큰만 포함될 수 있으므로 누적은 호출자 측에서 수행
+                yield chunk
+            
+        except Exception as e:
+            raise Exception(f"ChatGPT API 스트리밍 중 오류 발생: {str(e)}")
+        
 model_instance = ChatGPTModel()
