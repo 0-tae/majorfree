@@ -58,7 +58,8 @@
 
 ## 시스템 아키텍처
 ![front](https://github.com/user-attachments/assets/74ce1965-c950-4bdc-9de7-6d6820f6bd4e)
-![server](https://github.com/user-attachments/assets/a740c725-5aac-41c3-81b3-7a0668d6bcbc)
+![server](https://github.com/user-attachments/assets/6990562f-e822-48bc-894e-b18022c4b6ef)
+
 
 ## LLM 동작 흐름
 
