@@ -1,102 +1,88 @@
-# MCP Server & SQL Agent Dashboard
+# 전공차차
 
-MCP 서버와 SQL Agent의 로그를 시각화하고 관리하는 웹 대시보드입니다.
+## 프로젝트 소개
+
+충남대학교에서 2025년도에 신설된 창의융합대학 자율전공학부 학생들의 강의 기반의 전공 탐색을 도와주고, 학습 자료를 제공하는 AI Agent Platform 입니다.
+
+## 문제 정의 및 프로젝트 목표
+
+이 프로젝트의 목표와 상세한 문제 정의는 [Notion](https://zircon-locust-4fc.notion.site/277094faf755805e996dee8bfe90378d?source=copy_link) 에 정리 해두었습니다.
 
 ## 주요 기능
 
-### 1. SQL Agent 중간 출력 저장 및 시각화
+### AI 챗봇 기능
 
-- SQL Agent의 중간 단계 출력을 데이터베이스에 자동 저장
-- 각 단계별 도구 이름, 입력, 출력, 실행 시간 표시
-- 실시간 로그 확인 및 분석
+(이미지)
 
-### 2. MCP 서버 로그 관리
+- Langchain, Langgraph를 활용한 LLM 답변 생성 파이프라인 정의
+- WebSocket 기반 실시간 스트리밍 통신
+- 실시간 스트리밍을 활용한 파이프라인 작업 현황 출력
+- 별도의 페이지 이동 없이, 내부 챗봇을 이용할 수 있는 아이콘 추가
+- 교내 공공데이터를 데이터베이스에 저장하고, MCP서버로 조회하여 답변할 수 있도록 구성 (ex. "컴퓨터융합학부에서 3학년이 가장 많이 듣는 과목이 뭐야?", "우리학교 이산 수학 과목은 어떤 걸 배워?")
 
-- MCP 서버의 실행 로그 저장 및 시각화
-- 서버별 로그 필터링
-- 실행 결과 및 응답 시간 추적
+### 학과별 커리큘럼 & 학습 자료 제공
 
-### 3. MCP 서버 관리
+(이미지)
 
-- 서버 정보 수정 (name, description, prompt)
-- 웹 UI를 통한 서버 실행
-- 실시간 서버 상태 모니터링
+- 교내 공공데이터를 활용하여 학과/학부의 1~4학년이 수강하는 과목을 정리
+- Youtube, Naver, Local Database(KOCW) MCP Server를 활용한 강의명 키워드 기반 학습자료 제공
 
-### 4. 웹 대시보드
+### 강의 계획서 AI 요약
 
-- 직관적인 웹 인터페이스
-- 실시간 데이터 업데이트
-- 반응형 디자인
+(이미지)
 
-## 설치 및 실행
+- 강의계획서의 내용을 LLM 으로 요약하여 출력
+- 실제 강의를 수강할 때 들었던 생각을 바탕으로, '이 강의를 수강하면 좋은 점' 항목 추가
 
-### 1. 의존성 설치
+### 학과 정보 탐색
 
-```bash
-pip install -r requirements.txt
-```
+(이미지)
 
-### 2. 데이터베이스 설정
+- 커리어넷 전공별 교수 인터뷰 데이터를 활용한 RAG 방식의 질의 응답 수행
+- "질문: ..., 답변: ..." 형식으로, 답변에 대해 chunk data를 나누고, 질문 반복하는 헤더 형식으로 구성하여 Vector DB에 Embedding 후 저장
+- 학과명과 질문을 클라이언트로부터 입력받음 (학과명 기반 질문)
 
-MySQL 데이터베이스가 필요합니다. `database_connector.py`에서 연결 정보를 확인하세요.
+## 시스템 아키텍처
 
-### 3. 환경 변수 설정
+(이미지)
 
-```bash
-export OPENAI_API_KEY="your-openai-api-key"
-```
+## 동작 흐름
 
-### 4. 애플리케이션 실행
+### 1) 사용자 질문 - 답변 흐름
 
-```bash
-python app.py
-```
+(이미지)
 
-웹 브라우저에서 `http://localhost:8000`으로 접속하세요.
+### 2) 답변 파이프라인 그래프
 
-## API 엔드포인트
+자세한 출력 과정은 `langgraph_introduce.ipynb`를 통해 확인해주세요
+(이미지)
 
-### SQL Agent 관련
+## 기술 스택
 
-- `POST /api/sql-agent/execute` - SQL Agent 실행
-- `GET /api/sql-agent/logs` - SQL Agent 로그 조회
-- `POST /api/sql-agent/logs/date-range` - 날짜 범위로 로그 조회
+### Backend Server & Database
 
-### MCP 서버 관련
+![MySQL](https://img.shields.io/badge/mysql-%2300f.svg?style=for-the-badge&logo=mysql&logoColor=white)
+![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)
+![Java](https://img.shields.io/badge/java-%23ED8B00.svg?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/spring%20boot-%236DB33F.svg?style=for-the-badge&logo=spring-boot&logoColor=white)
 
-- `GET /api/mcp-servers` - MCP 서버 목록 조회
-- `GET /api/mcp-logs` - MCP 서버 로그 조회
-- `POST /api/mcp-servers/update` - MCP 서버 정보 업데이트
-- `POST /api/mcp-servers/execute` - MCP 서버 실행
+### LLM Backend Server & Database
 
-## 데이터베이스 스키마
+![LangChain](https://img.shields.io/badge/langchain-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-74aa9c?style=for-the-badge&logo=openai&logoColor=white)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-FF6B35?style=for-the-badge&logo=chroma&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 
-### sql_agent_log 테이블
+### Frontend Server
 
-- SQL Agent의 중간 단계 출력 저장
-- tool_name, tool_input, tool_output, step_order 등 포함
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![Next JS](https://img.shields.io/badge/Next-black?style=for-the-badge&logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)
 
-### mcp_server 테이블
+### Infra Structure
 
-- MCP 서버 정보 저장
-- server_name, name, description, prompt 등 포함
-
-### mcp_answer_log 테이블
-
-- MCP 서버 실행 로그 저장
-- mcp_server, name, instruction, answer 등 포함
-
-## 사용법
-
-1. **SQL Agent 실행**: 웹 UI에서 지시사항과 허용된 테이블을 입력하여 SQL Agent를 실행
-2. **로그 확인**: 실행 후 자동으로 저장된 로그를 실시간으로 확인
-3. **MCP 서버 관리**: 서버 정보를 수정하고 웹 UI를 통해 실행
-4. **로그 분석**: 각 단계별 실행 과정과 결과를 분석
-
-## 개발 환경
-
-- Python 3.8+
-- FastAPI
-- MySQL
-- LangChain
-- Bootstrap 5
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
+![Nginx](https://img.shields.io/badge/nginx-%23009639.svg?style=for-the-badge&logo=nginx&logoColor=white)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)
