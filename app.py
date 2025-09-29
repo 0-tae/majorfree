@@ -9,6 +9,7 @@ from fastapi.websockets import WebSocketDisconnect
 from stream_models import AiMessageChunkModel, ChunkMetadataModel
 from utils import write_stream_log
 from databases.chat_database import get_chats_by_session_id
+from databases.redis_connector import existsKey, findBySessionId, save as save_to_redis
 
 app = FastAPI()
 
@@ -76,20 +77,30 @@ async def chat_stream(websocket: WebSocket):
                 data = await websocket.receive_json()
                 session_id = data.get("session_id")
                 
-                # TODO 1) Redis에 session_id에 대한 채팅목록이 존재하면 로드,
-                # TODO 3) 채팅내역 모두 로드 후, Redis에 session_id에 대한 채팅목록 초기화
-
+                # 1) Redis에 session_id에 대한 채팅목록이 존재하면 로드
                 messages = []
                 
                 if session_id:
+                    # Redis에서 채팅 기록 확인
+                    redis_exists = await existsKey(session_id)
                     
-                    # TODO 2) 없다면 MySQL 통해 채팅내역 모두 로드
-                    chats = get_chats_by_session_id(session_id)
-                    for chat in chats:
-                        messages.append({
-                            "role": "assistant" if chat.is_bot else "user",
-                            "content": chat.content
-                        })
+                    if redis_exists:
+                        # Redis에서 메시지 로드
+                        messages = await findBySessionId(session_id)
+                        print(f"Redis에서 {len(messages)}개의 메시지를 로드했습니다.")
+                    else:
+                        # 2) Redis에 없다면 MySQL 통해 채팅내역 모두 로드
+                        chats = get_chats_by_session_id(session_id)
+                        for chat in chats:
+                            messages.append({
+                                "role": "assistant" if chat.is_bot else "user",
+                                "content": chat.content
+                            })
+                        print(f"MySQL에서 {len(messages)}개의 메시지를 로드했습니다.")
+                        
+                        # MySQL에서 로드한 메시지를 Redis에 저장
+                        if messages:
+                            await save_to_redis(session_id, messages)
                 
                 current_node_name = None
                 
